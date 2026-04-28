@@ -1,111 +1,115 @@
 @echo off
 chcp 65001 >nul
-title TikTok 私信工具 - 安装程序
+title TikTok DM Tool - Installer
 
 echo ========================================
-echo    TikTok 私信工具 - 一键安装
+echo    TikTok DM Tool - One-Click Install
 echo ========================================
 echo.
 
 :: ========================================
-:: 第一步：检查 Python
+:: Step 1: Check Python
 :: ========================================
-echo [1/4] 检查 Python 环境...
+echo [1/4] Checking Python...
 
 python --version >nul 2>&1
 if %errorlevel% equ 0 (
-    echo    ✅ Python 已安装: 
+    echo    [OK] Python found: 
     python --version
+    goto :check_pip
 ) else (
-    echo    ❌ Python 未安装
+    echo    [FAIL] Python not found
     echo.
-    echo    请先安装 Python 3.9+:
-    echo    1. 打开 https://www.python.org/downloads/
-    echo    2. 下载 Python 3.9 或更高版本
-    echo    3. 安装时勾选 "Add Python to PATH"
+    echo    Please install Python 3.9+ first:
+    echo    1. Go to https://www.python.org/downloads/
+    echo    2. Download Python 3.9 or higher
+    echo    3. IMPORTANT: Check "Add Python to PATH"
     echo.
     pause
     exit /b 1
 )
 
+:check_pip
 :: ========================================
-:: 第二步：安装依赖
+:: Step 2: Install dependencies
 :: ========================================
 echo.
-echo [2/4] 安装 Python 依赖（playwright, playwright-stealth）...
-echo    这可能需要几分钟，请耐心等待...
+echo [2/4] Installing Python packages (playwright, playwright-stealth)...
+echo    This may take a few minutes, please wait...
 
 pip install playwright playwright-stealth -q
 if %errorlevel% neq 0 (
-    echo    ❌ pip 安装失败，尝试使用 python -m pip...
+    echo    Retrying with python -m pip...
     python -m pip install playwright playwright-stealth -q
 )
 
 :: ========================================
-:: 第三步：安装浏览器
+:: Step 3: Install browser
 :: ========================================
 echo.
-echo [3/4] 安装 Chromium 浏览器...
-echo    这可能需要几分钟，请耐心等待...
+echo [3/4] Installing Chromium browser...
+echo    This may take a few minutes, please wait...
 
 python -m playwright install chromium
 if %errorlevel% neq 0 (
-    echo    ❌ 浏览器安装失败
+    echo    [FAIL] Browser installation failed
     pause
     exit /b 1
 )
 
 :: ========================================
-:: 第四步：下载脚本
+:: Step 4: Download script
 :: ========================================
 echo.
-echo [4/4] 检查脚本文件...
+echo [4/4] Checking script file...
 
 set SCRIPT_URL=https://raw.githubusercontent.com/robinzhang/guanchao/main/tiktok_dm_stealth.py
-set SCRIPT_PATH=%USERPROFILE%\Desktop\TikTok私信工具
+set SCRIPT_PATH=%USERPROFILE%\Desktop\TikTok-DM-Tool
 mkdir "%SCRIPT_PATH%" 2>nul
 
 where tiktok_dm_stealth.py >nul 2>&1
 if %errorlevel% equ 0 (
-    echo    ✅ 脚本已在当前目录
-    set SCRIPT_DIR=%CD%
+    echo    [OK] Script found in current directory
 ) else (
-    echo    📥 正在下载脚本...
+    echo    Downloading script...
     powershell -Command "Invoke-WebRequest -Uri '%SCRIPT_URL%' -OutFile '%SCRIPT_PATH%\tiktok_dm_stealth.py'"
     if %errorlevel% equ 0 (
-        echo    ✅ 脚本已下载到: %SCRIPT_PATH%
+        echo    [OK] Script saved to: %SCRIPT_PATH%
     ) else (
-        echo    ⚠️ 自动下载失败，请手动下载:
+        echo    [FAIL] Download failed
+        echo    Please manually download from:
         echo    https://github.com/robinzhang/guanchao
-        echo    仓库中的 tiktok_dm_stealth.py 文件，保存到桌面
+        echo    Save tiktok_dm_stealth.py to your Desktop
     )
 )
 
 :: ========================================
-:: 完成
+:: Done
 :: ========================================
 echo.
 echo ========================================
-echo    ✅ 安装完成！
+echo    INSTALLATION COMPLETE!
 echo ========================================
 echo.
-echo 接下来请按以下步骤操作：
+echo NEXT STEPS:
 echo.
-echo 【第一步】打开 Chrome，创建专属 Profile
-echo    1. 点击右上角头像 → 添加
-echo    2. 创建新 Profile，起名如"自动化"
-echo    3. 用这个 Profile 登录 TikTok
+echo [Step 1] Create a new Chrome Profile for automation
+echo    1. Click your avatar in Chrome top-right
+echo    2. Click "Add"
+echo    3. Create a new Profile, name it like "Automation"
+echo    4. Login to TikTok with this Profile
 echo.
-echo 【第二步】关闭所有 Chrome 窗口
+echo [Step 2] Close ALL Chrome windows
 echo.
-echo 【第三步】启动 Chrome（开启调试模式）
-echo    按 Win+R，输入以下命令，回车：
+echo [Step 3] Start Chrome in debug mode
+echo    Press Win+R, paste and run this:
 echo.
 echo "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --profile-directory="Profile 2"
 echo.
-echo 【第四步】运行私信脚本
-echo    1. 打开 %SCRIPT_PATH%
-echo    2. 双击运行 tiktok_dm_stealth.py
+echo [Step 4] Run the DM script
+echo    1. Go to %SCRIPT_PATH%
+echo    2. Double-click tiktok_dm_stealth.py
+echo    3. Enter TikTok URL and message
 echo.
 echo ========================================
 echo.
