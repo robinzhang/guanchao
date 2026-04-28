@@ -91,10 +91,9 @@ def scroll_and_watch(page, scroll_count=5):
     for i in range(scroll_count):
         scroll_amount = random.randint(500, 1200)
         page.evaluate(f"window.scrollBy(0, {scroll_amount})")
-        watch_time = random.uniform(1, 2.5)
+        watch_time = random.uniform(2, 5)  # 每个视频 2-5 秒
         time.sleep(watch_time)
         print(f"   👀 浏览第 {i+1}/{scroll_count} 个视频 (~{watch_time:.1f}s)")
-        time.sleep(random.uniform(0.5, 1.5))
 
 
 def click_element(page, selectors, element_name):
