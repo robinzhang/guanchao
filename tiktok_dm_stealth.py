@@ -39,7 +39,6 @@ try:
 except ImportError:
     STEALTH_AVAILABLE = False
     print("⚠️ playwright-stealth 未安装，使用基础反检测")
-    print("   安装: pip install playwright-stealth")
 
 
 def apply_stealth(page):
@@ -156,13 +155,18 @@ def click_follow(page):
 def send_direct_message(page, message):
     """发送私信"""
     print("   💬 准备发送私信...")
+
+    # 点击消息按钮
     message_selectors = [
         'a:has-text("发消息")',
         'a:has-text("消息")',
         '[class*="message"]',
         '[data-e2e="message-button"]',
         'button:has-text("发消息")',
+        'button:has-text("Message")',
+        '[data-e2e="contact-btn"]',
     ]
+
     msg_opened = False
     for selector in message_selectors:
         try:
@@ -178,39 +182,149 @@ def send_direct_message(page, message):
                     break
         except Exception:
             continue
+
     if not msg_opened:
-        print("   ⚠️ 无法打开消息窗口")
-        return
-    time.sleep(random.uniform(1.5, 3))
-    print(f"   ✍️ 输入私信: {message}")
-    textarea_selectors = ['textarea', 'div[contenteditable="true"]', 'input[type="text"]', '[data-e2e="message-input"]']
-    text_filled = False
-    for selector in textarea_selectors:
+        print("   ⚠️ 无法打开消息窗口，尝试其他方式...")
+        # 尝试直接导航到 DM 页面
         try:
-            el = page.locator(selector).first
-            if el.is_visible(timeout=2000):
-                el.click()
-                time.sleep(random.uniform(0.3, 0.6))
-                for char in message:
-                    el.type(char, delay=random.uniform(50, 150))
-                text_filled = True
-                print("   ✅ 文字已输入")
-                break
+            # 尝试点击达人页面上的消息图标
+            page.click('svg[class*="message"]', timeout=3000)
+            msg_opened = True
+            print("   ✅ 消息窗口已打开（通过svg）")
         except Exception:
-            continue
+            pass
+
+    if not msg_opened:
+        print("   ⚠️ 无法自动打开消息窗口，请手动打开后再试")
+        return
+
+    # 等待消息窗口完全加载
+    time.sleep(random.uniform(2.0, 4.0))
+
+    print(f"   ✍️ 输入私信: {message}")
+
+    # 尝试多种方式找到输入框
+    text_filled = False
+
+    # 方法1： contenteditable div
+    try:
+        editor = page.locator('div[contenteditable="true"][role="textbox"]').first
+        if editor.is_visible(timeout=3000):
+            editor.click()
+            time.sleep(random.uniform(0.3, 0.6))
+            for char in message:
+                editor.type(char, delay=random.uniform(50, 150))
+            text_filled = True
+            print("   ✅ 文字已输入 (contenteditable)")
+    except Exception:
+        pass
+
+    # 方法2：直接找 textarea
     if not text_filled:
-        raise Exception("找不到输入框")
-    time.sleep(random.uniform(0.5, 1.5))
-    send_selectors = ['button:has-text("发送")', 'button:has-text("Send")', '[data-e2e="send-button"]', 'button[class*="Send"]']
+        for selector in [
+            'textarea',
+            'textarea[id]',
+            'textarea[class]',
+            '[data-e2e="message-input"]',
+            '#message-input',
+        ]:
+            try:
+                el = page.locator(selector).first
+                if el.is_visible(timeout=2000):
+                    el.click()
+                    time.sleep(random.uniform(0.2, 0.5))
+                    for char in message:
+                        el.type(char, delay=random.uniform(50, 150))
+                    text_filled = True
+                    print(f"   ✅ 文字已输入 ({selector})")
+                    break
+            except Exception:
+                continue
+
+    # 方法3：找输入框并使用 fill
+    if not text_filled:
+        try:
+            inputs = page.locator('input[type="text"]').all()
+            for inp in inputs:
+                try:
+                    if inp.is_visible(timeout=1000):
+                        inp.fill(message)
+                        text_filled = True
+                        print("   ✅ 文字已输入 (fill)")
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # 方法4：直接在页面上执行 JS 输入
+    if not text_filled:
+        try:
+            page.evaluate(f"""
+                () => {{
+                    const editors = document.querySelectorAll('div[contenteditable="true"]');
+                    for (const editor of editors) {{
+                        if (editor.offsetParent !== null) {{
+                            editor.focus();
+                            const text = "{message}";
+                            editor.innerText = text;
+                            editor.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            editor.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            break;
+                        }}
+                    }}
+                }}
+            """)
+            text_filled = True
+            print("   ✅ 文字已输入 (JS)")
+        except Exception as e:
+            print(f"   ⚠️ JS 输入失败: {e}")
+
+    if not text_filled:
+        print("   ⚠️ 无法自动填写输入框，请手动输入")
+        # 截图保存当前状态
+        try:
+            page.screenshot(path="tiktok_dm_input_error.png")
+            print("   📸 截图已保存: tiktok_dm_input_error.png")
+        except:
+            pass
+        return
+
+    # 等待一下再点发送
+    time.sleep(random.uniform(0.8, 2.0))
+
+    # 点击发送按钮
+    sent = False
+    send_selectors = [
+        'button:has-text("发送")',
+        'button:has-text("Send")',
+        'button:has-text("send")',
+        '[data-e2e="send-button"]',
+        'button[class*="Send"]',
+        'button[class*="send"]',
+        '[class*="send-btn"]',
+        'div[role="button"]:has-text("发送")',
+    ]
+
     for selector in send_selectors:
         try:
             btn = page.locator(selector).first
             if btn.is_visible(timeout=2000):
-                btn.click()
-                print("   ✅ 私信已发送")
-                break
+                box = btn.bounding_box()
+                if box:
+                    human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                    time.sleep(random.uniform(0.2, 0.5))
+                    btn.click()
+                    sent = True
+                    print("   ✅ 私信已发送")
+                    break
         except Exception:
             continue
+
+    if not sent:
+        print("   ⚠️ 找不到发送按钮，尝试按回车发送")
+        page.keyboard.press("Enter")
+
     time.sleep(random.uniform(1, 2))
 
 
