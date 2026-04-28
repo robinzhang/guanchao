@@ -112,12 +112,20 @@ def random_scroll(page):
 
 
 def open_creator_page(page, url):
-    """打开达人首页"""
+    """打开达人首页，模拟浏览视频"""
     print(f"   🌐 打开: {url}")
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    random_scroll(page)
-    random_scroll(page)
-    time.sleep(random.uniform(2, 4))
+
+    # 模拟人类浏览：滚动页面看几个视频
+    print("   👀 模拟浏览视频...")
+    scroll_count = random.randint(3, 8)  # 随机滚动3-8次
+    for i in range(scroll_count):
+        scroll_amount = random.randint(500, 1200)
+        page.evaluate(f"window.scrollBy(0, {scroll_amount})")
+        watch_time = random.uniform(1, 2.5)  # 每次看1-2.5秒
+        time.sleep(watch_time)
+        print(f"   👀 浏览第 {i+1}/{scroll_count} 个视频 (~{watch_time:.1f}s)")
+
     print(f"   ✅ 页面加载完成: {page.title()}")
 
 
@@ -148,7 +156,10 @@ def click_follow(page):
             continue
     if not followed:
         print("   ⚠️ 未找到关注按钮（可能已关注）")
-    time.sleep(random.uniform(1, 2))
+    # 关注后等待5-10秒再发私信
+    wait_after_follow = random.uniform(5, 10)
+    print(f"   🤖 关注后等待 {wait_after_follow:.1f} 秒...")
+    time.sleep(wait_after_follow)
     return followed
 
 
@@ -198,8 +209,10 @@ def send_direct_message(page, message):
         print("   ⚠️ 无法自动打开消息窗口，请手动打开后再试")
         return
 
-    # 等待消息窗口完全加载
-    time.sleep(random.uniform(2.0, 4.0))
+    # 打开消息窗口后等待5-10秒再输入
+    wait_before_type = random.uniform(5, 10)
+    print(f"   🤖 消息窗口打开，等待 {wait_before_type:.1f} 秒后开始输入...")
+    time.sleep(wait_before_type)
 
     print(f"   ✍️ 输入私信: {message}")
 
