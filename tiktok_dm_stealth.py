@@ -159,14 +159,19 @@ def run_dm_task(tiktok_url, message):
             # 步骤2：点击头像旁边的关注
             # ========================================
             print("\n📍 步骤2: 点击头像旁边的关注...")
-            # 头像区域附近的关注按钮（更精准的选择器）
+            # 头像右侧/紧邻的关注按钮（达人主页头部）
             follow_selectors = [
-                'div[data-e2e="browser-navigator"] button:has-text("关注")',
-                'h1 + div button:has-text("关注")',
-                'div[class*="Info"] button:has-text("关注")',
-                '[class*="shareInfo"] button:has-text("关注")',
-                '[class*="author-info"] button:has-text("关注")',
-                'button:has-text("关注")',  # 兜底
+                # TikTok 主页头部的关注按钮
+                '[data-e2e="follow-user-button"]',
+                # 头像容器的右侧按钮组
+                'div[class*="share-container"] button:has-text("关注")',
+                'div[class*="action"] button:has-text("关注")',
+                'div[class*="button"] button:has-text("关注")',
+                # 头像右侧横向排列的按钮
+                '[class*="header-actions"] button:has-text("关注")',
+                '[class*="author"] button:has-text("关注")',
+                # 兜底：直接找关注按钮
+                'button:has-text("关注")',
             ]
             click_element(page, follow_selectors, "关注")
 
@@ -189,16 +194,22 @@ def run_dm_task(tiktok_url, message):
             # 步骤6：点击头像旁边的消息
             # ========================================
             print("\n📍 步骤6: 点击头像旁边的消息...")
-            # 头像区域附近的消息按钮（更精准的选择器）
+            # 头像右侧/紧邻的消息按钮（达人主页头部）
             message_selectors = [
-                'div[data-e2e="browser-navigator"] a:has-text("发消息")',
-                'div[data-e2e="browser-navigator"] button:has-text("发消息")',
-                'h1 + div a:has-text("发消息")',
-                'div[class*="Info"] a:has-text("发消息")',
-                'div[class*="shareInfo"] a:has-text("发消息")',
-                'div[class*="author-info"] a:has-text("发消息")',
-                'a:has-text("发消息")',  # 兜底
-                'a:has-text("消息")',
+                # TikTok 主页头部的消息按钮
+                '[data-e2e="contact-msg-btn"]',
+                '[data-e2e="message-button"]',
+                # 头像容器的右侧按钮组
+                'div[class*="share-container"] a:has-text("发消息")',
+                'div[class*="share-container"] button:has-text("发消息")',
+                'div[class*="action"] a:has-text("发消息")',
+                'div[class*="action"] button:has-text("发消息")',
+                # 头像右侧横向排列的按钮
+                '[class*="header-actions"] a:has-text("发消息")',
+                '[class*="author"] a:has-text("发消息")',
+                # 兜底
+                'a:has-text("发消息")',
+                'button:has-text("发消息")',
             ]
             click_element(page, message_selectors, "消息")
 
