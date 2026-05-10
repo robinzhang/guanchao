@@ -215,7 +215,7 @@
     return null;
   }
 
-  // 输入文字到私信框 - 使用剪贴板粘贴（Draft.js 最兼容的方式）
+  // 输入文字到私信框 - 模拟键盘逐字输入（Draft.js 最自然的触发方式）
   async function typeMessage(text) {
     console.log('[DM] 输入私信:', text);
     await delay(6);
@@ -232,64 +232,128 @@
     console.log('[DM] 已聚焦到编辑器');
     await delay(2);
     
-    // 方法1: 使用剪贴板 API（最兼容 Draft.js）
-    try {
-      // 复制文本到剪贴板
-      await navigator.clipboard.writeText(text);
-      console.log('[DM] 已复制到剪贴板');
-      
-      // 执行粘贴
-      document.execCommand('paste', false, null);
-      console.log('[DM] 已执行粘贴');
-      await delay(2);
-      
-      // 检查结果
-      const content = editor.innerText || editor.textContent || '';
-      console.log('[DM] 粘贴后内容:', content.substring(0, 30) || '(空)');
-      
-      if (content.trim()) {
-        console.log('[DM] 剪贴板粘贴成功');
-        return true;
-      }
-    } catch (e) {
-      console.log('[DM] 剪贴板方式失败:', e.message);
-    }
-    
-    // 方法2: execCommand insertText
-    console.log('[DM] 尝试 execCommand insertText...');
-    editor.focus();
-    
-    // 全选并删除
-    document.execCommand('selectAll', false, null);
-    await delay(0.2);
-    document.execCommand('delete', false, null);
-    await delay(0.2);
-    
-    // 插入文本
-    document.execCommand('insertText', false, text);
-    await delay(1);
-    
-    let content = editor.innerText || editor.textContent || '';
-    console.log('[DM] insertText 后内容:', content.substring(0, 30) || '(空)');
-    
-    if (content.trim()) {
-      console.log('[DM] insertText 成功');
-      return true;
-    }
-    
-    // 方法3: 直接替换 br 为 span
-    console.log('[DM] 尝试直接替换 br...');
+    // 找到 br[data-text="true"] 并替换
     const br = $('br[data-text="true"]');
     if (br) {
+      console.log('[DM] 找到 br[data-text], 准备替换');
+      
+      // 创建 span 元素
       const span = document.createElement('span');
       span.setAttribute('data-text', 'true');
+      
+      // 先把文字放到 span 里
       span.textContent = text;
+      
+      // 替换 br
       br.parentNode.replaceChild(span, br);
-      console.log('[DM] 直接替换 br 成功');
+      console.log('[DM] 已替换 br 为 span');
+      
+      // 关键：需要触发 Draft.js 的 onChange
+      // 创建一个可写的 Selection
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // 触发 input 事件
+      editor.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      // 触发 beforeinput 事件
+      editor.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      // 触发 keydown 事件
+      const keyEvent = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+        keyCode: 13,
+        which: 13
+      });
+      editor.dispatchEvent(keyEvent);
+      
+      await delay(1);
+      
+      // 检查输入结果
+      console.log('[DM] 输入后 span 内容:', span.textContent);
+      console.log('[DM] 输入后 editor 内容:', editor.innerText);
+      
+      // 如果还是不行，尝试模拟键盘输入
+      if (!span.textContent.trim()) {
+        console.log('[DM] 尝试模拟键盘输入...');
+        
+        // 重新聚焦
+        editor.focus();
+        await delay(0.5);
+        
+        // 获取新的 br
+        const newBr = $('br[data-text="true"]');
+        if (newBr) {
+          // 模拟每个字符的键盘输入
+          for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            
+            // 触发 keypress
+            const keypressEvent = new KeyboardEvent('keypress', {
+              bubbles: true,
+              cancelable: true,
+              key: char,
+              keyCode: char.charCodeAt(0)
+            });
+            editor.dispatchEvent(keypressEvent);
+            await delay(0.05);
+            
+            // 直接修改 DOM
+            const currentBr = $('br[data-text="true"]');
+            if (currentBr) {
+              const newSpan = document.createElement('span');
+              newSpan.setAttribute('data-text', 'true');
+              newSpan.textContent = text.substring(0, i + 1);
+              currentBr.parentNode.replaceChild(newSpan, currentBr);
+            }
+          }
+          
+          // 触发完成事件
+          editor.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText'
+          }));
+          
+          console.log('[DM] 模拟键盘输入完成');
+        }
+      }
+      
       return true;
+    } else {
+      console.log('[DM] 未找到 br[data-text]');
+      
+      // 可能已经有内容了，直接尝试
+      const span = $('span[data-text="true"]');
+      if (span) {
+        span.textContent = text;
+        editor.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: text
+        }));
+        console.log('[DM] 直接设置 span 内容');
+        return true;
+      }
     }
     
-    console.log('[DM] 所有输入方式都失败');
     return false;
   }
 
