@@ -176,6 +176,7 @@
     
     const inputSelectors = [
       // TikTok 私信输入框
+      'span[data-text="true"]',
       'div[contenteditable="true"][data-lexical-editor="true"]',
       'div[contenteditable="true"][data-gramm="false"]',
       'div[contenteditable="true"][spellcheck="false"]',
@@ -258,6 +259,19 @@
   // 输入文本到 contentEditable 元素
   function inputText(el, text) {
     el.focus();
+    
+    // 如果是 span[data-text="true"] 元素
+    if (el.tagName === 'SPAN' && el.hasAttribute('data-text')) {
+      el.textContent = text;
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      console.log('[TikTok DM] span[data-text] 输入:', text);
+      return;
+    }
     
     // 清空现有内容
     document.execCommand('selectAll', false, null);
