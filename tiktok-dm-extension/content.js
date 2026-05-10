@@ -175,11 +175,12 @@
     console.log('[TikTok DM] 查找私信输入框...');
     
     const inputSelectors = [
-      // TikTok 私信输入框
+      // TikTok 私信输入框容器
+      'div[data-e2e="message-input-area"]',
       'div[data-e2e="dm-new-input-editor"]',
       'div[contenteditable="true"][aria-label="发送消息..."]',
       'div.public-DraftEditor-content',
-      'span[data-text="true"]',
+      'br[data-text="true"]',
       // 备选
       'textarea[id*="message"]',
       'textarea[id*="dm"]'
@@ -253,39 +254,37 @@
     return null;
   }
 
-  // 输入文本到 contentEditable 元素
+  // 输入文本到 TikTok 私信输入框
   function inputText(el, text) {
-    // TikTok 使用 Draft.js，先聚焦然后用 insertText
-    const target = el.tagName === 'DIV' ? el : el;
-    target.focus();
+    // 找到 div[data-e2e="message-input-area"] 内的 br[data-text="true"] 并替换为 span
+    const container = el.closest('div[data-e2e="message-input-area"]') || el;
+    const br = container.querySelector('br[data-text="true"]');
     
-    // Draft.js 兼容方式：使用 insertText
-    document.execCommand('selectAll', false, null);
-    document.execCommand('delete', false, null);
-    
-    // 等待 focus 生效
-    setTimeout(() => {
-      document.execCommand('insertText', false, text);
+    if (br) {
+      // 创建新的 span 元素
+      const span = document.createElement('span');
+      span.setAttribute('data-text', 'true');
+      span.textContent = text;
       
-      // 检查输入结果
-      const actualText = target.innerText || target.textContent || '';
-      console.log('[TikTok DM] 输入内容:', actualText || text);
+      // 替换 br 为 span
+      br.parentNode.replaceChild(span, br);
       
-      // 如果 innerText 为空，尝试直接操作 span[data-text]
-      if (!actualText.trim()) {
-        const span = target.querySelector('span[data-text="true"]');
-        if (span) {
-          span.textContent = text;
-          span.dispatchEvent(new InputEvent('input', {
-            bubbles: true,
-            cancelable: true,
-            inputType: 'insertText',
-            data: text
-          }));
-          console.log('[TikTok DM] 直接写入 span[data-text]:', text);
-        }
-      }
-    }, 100);
+      // 触发 input 事件
+      span.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      console.log('[TikTok DM] 替换 br 为 span，输入:', text);
+    } else {
+      // 备选：直接在 innerHTML 里操作
+      const current = container.innerHTML;
+      const newHtml = current.replace(/<br data-text="true"><\/div>/, `<span data-text="true">${text}</span></div>`);
+      container.innerHTML = newHtml;
+      console.log('[TikTok DM] 通过 innerHTML 替换 br，输入:', text);
+    }
   }
 
   // 主发送流程
