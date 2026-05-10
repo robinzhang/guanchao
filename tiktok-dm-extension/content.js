@@ -1,4 +1,4 @@
-// content.js - TikTok 页面内的私信发送逻辑
+// content.js - TikTok 私信发送插件
 (function() {
   'use strict';
 
@@ -8,400 +8,446 @@
     return match ? match[1] : null;
   }
 
-  // 随机延迟
-  function randomDelay(min, max) {
-    const delay = Math.random() * (max - min) + min;
-    return new Promise(resolve => setTimeout(resolve, delay * 1000));
+  // 随机延迟（秒）
+  function delay(sec) {
+    return new Promise(resolve => setTimeout(resolve, sec * 1000));
   }
 
-  // 查找元素（支持选择器和 XPath）
-  function findElement(selectors) {
-    if (typeof selectors === 'string') {
-      selectors = [selectors];
+  // 查找单个元素
+  function $(selector) {
+    if (selector.startsWith('//')) {
+      const result = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      return result.singleNodeValue;
     }
-    for (const sel of selectors) {
-      try {
-        // 尝试作为 XPath
-        if (sel.startsWith('//')) {
-          const result = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          if (result.singleNodeValue) {
-            console.log('[TikTok DM] Found via XPath:', sel);
-            return result.singleNodeValue;
-          }
-        } else {
-          const el = document.querySelector(sel);
-          if (el) {
-            console.log('[TikTok DM] Found via selector:', sel);
-            return el;
-          }
-        }
-      } catch (e) {
-        console.log('[TikTok DM] Selector error:', sel, e.message);
-      }
-    }
-    return null;
+    return document.querySelector(selector);
   }
 
   // 查找所有匹配元素
-  function findElements(selectors) {
-    if (typeof selectors === 'string') {
-      selectors = [selectors];
+  function $$(selector) {
+    if (selector.startsWith('//')) {
+      const result = document.evaluate(selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      const items = [];
+      for (let i = 0; i < result.snapshotLength; i++) {
+        items.push(result.snapshotItem(i));
+      }
+      return items;
     }
-    for (const sel of selectors) {
-      try {
-        if (sel.startsWith('//')) {
-          const snapshot = document.evaluate(sel, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-          if (snapshot.snapshotLength > 0) {
-            return Array.from(snapshot.snapshotItems((_, i) => snapshot.snapshotItem(i)));
-          }
-        } else {
-          const els = document.querySelectorAll(sel);
-          if (els.length > 0) {
-            return Array.from(els);
-          }
-        }
-      } catch (e) {}
-    }
-    return [];
+    return Array.from(document.querySelectorAll(selector));
   }
 
+  // 点击元素
+  function click(el) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    el.click();
+    return true;
+  }
+
+  // ========================================
+  // 关注功能
+  // ========================================
+  
   // 检查是否已关注
-  async function checkIsFollowing() {
-    await randomDelay(0.5, 1);
+  async function checkFollowing() {
+    await delay(0.5);
     
-    // 查找"已关注"按钮
-    const followingSelectors = [
-      '[data-e2e="following-button"]',
-      'button[class*="following"]',
-      '//button[contains(text(), "Following")]',
-      '//span[contains(text(), "Following")]'
-    ];
-    
-    // 查找"关注"按钮
-    const followSelectors = [
-      '[data-e2e="follow-button"]',
-      '[data-e2e="follow-user-button"]',
-      'button[class*="follow"]',
-      '//button[contains(text(), "Follow")]',
-      '//span[contains(text(), "Follow")]'
-    ];
-    
-    // 检查是否有已关注按钮
-    const followingBtn = findElement(followingSelectors);
+    // 方法1: 检查已关注按钮
+    const followingBtn = $('[data-e2e="following-button"]');
     if (followingBtn && followingBtn.offsetParent !== null) {
-      console.log('[TikTok DM] 已关注状态');
+      console.log('[DM] 已关注');
       return true;
     }
     
-    // 检查关注按钮
-    const followBtn = findElement(followSelectors);
+    // 方法2: 检查关注按钮是否存在
+    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
     if (followBtn && followBtn.offsetParent !== null) {
-      console.log('[TikTok DM] 未关注，需要点击关注');
+      console.log('[DM] 未关注，需要关注');
       return false;
+    }
+    
+    // 方法3: 检查按钮文字
+    const buttons = $$('button');
+    for (const btn of buttons) {
+      const text = btn.innerText?.trim().toLowerCase();
+      if (text === 'following') return true;
+      if (text === 'follow') return false;
     }
     
     return false;
   }
 
   // 点击关注
-  async function clickFollow() {
-    console.log('[TikTok DM] 执行关注操作...');
+  async function doFollow() {
+    console.log('[DM] 执行关注...');
     
-    const followSelectors = [
-      '[data-e2e="follow-button"]',
-      '[data-e2e="follow-user-button"]',
-      'button[class*="follow"]',
-      '//button[contains(text(), "Follow")]'
-    ];
-    
-    const followBtn = findElement(followSelectors);
-    if (followBtn && followBtn.offsetParent !== null) {
-      followBtn.click();
-      console.log('[TikTok DM] 已点击关注按钮');
-      await randomDelay(2, 4);
+    // 方法1: data-e2e 选择器
+    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
+    if (followBtn && click(followBtn)) {
+      console.log('[DM] 点击关注按钮成功');
+      await delay(2);
       return true;
     }
     
-    console.log('[TikTok DM] 未找到关注按钮');
-    return false;
-  }
-
-  // 查找并点击消息按钮
-  async function clickMessageButton() {
-    console.log('[TikTok DM] 查找消息按钮...');
-    await randomDelay(1, 2);
-    
-    // 消息按钮选择器
-    const msgSelectors = [
-      '[data-e2e="contact-msg-btn"]',
-      '[data-e2e="message-button"]',
-      'a[href*="/message/"]',
-      '//a[contains(text(), "Message")]',
-      '//span[contains(text(), "Message")]',
-      '//div[contains(text(), "发消息")]',
-      '//button[contains(text(), "消息")]'
-    ];
-    
-    const msgBtn = findElement(msgSelectors);
-    if (msgBtn && msgBtn.offsetParent !== null) {
-      msgBtn.click();
-      console.log('[TikTok DM] 已点击消息按钮');
-      await randomDelay(2, 3);
-      return true;
-    }
-    
-    console.log('[TikTok DM] 未找到消息按钮，尝试其他方式...');
-    
-    // 尝试点击头像旁边的消息图标
-    const iconSelectors = [
-      '[data-e2e="avatar-icon"] + *',
-      '//div[contains(@class, "avatar")]/following-sibling::div//a',
-      '//div[contains(@class, "share-container")]//a'
-    ];
-    
-    const iconArea = findElement(iconSelectors);
-    if (iconArea) {
-      iconArea.click();
-      console.log('[TikTok DM] 点击了头像区域');
-      await randomDelay(2, 3);
-      return true;
-    }
-    
-    return false;
-  }
-
-  // 查找私信输入框
-  async function findMessageInput() {
-    console.log('[TikTok DM] 查找私信输入框...');
-    
-    const inputSelectors = [
-      // TikTok 私信输入框容器
-      'div[data-e2e="message-input-area"]',
-      'div[data-e2e="dm-new-input-editor"]',
-      'div[contenteditable="true"][aria-label="发送消息..."]',
-      'div.public-DraftEditor-content',
-      'br[data-text="true"]',
-      // 备选
-      'textarea[id*="message"]',
-      'textarea[id*="dm"]'
-    ];
-    
-    const inputEl = findElement(inputSelectors);
-    if (inputEl) {
-      console.log('[TikTok DM] 找到输入框');
-      return inputEl;
-    }
-    
-    // 等待输入框出现（点击消息按钮后）
-    for (let i = 0; i < 10; i++) {
-      await randomDelay(0.5, 1);
-      const inputEl = findElement(inputSelectors);
-      if (inputEl) {
-        console.log('[TikTok DM] 等待后找到输入框');
-        return inputEl;
+    // 方法2: 按文字找按钮
+    const buttons = $$('button');
+    for (const btn of buttons) {
+      if (btn.innerText?.trim().toLowerCase() === 'follow' && btn.offsetParent !== null) {
+        if (click(btn)) {
+          console.log('[DM] 按文字点击关注成功');
+          await delay(2);
+          return true;
+        }
       }
     }
     
-    console.log('[TikTok DM] 未找到输入框');
+    console.log('[DM] 未找到关注按钮');
+    return false;
+  }
+
+  // ========================================
+  // 私信功能
+  // ========================================
+  
+  // 点击消息按钮
+  async function clickMessage() {
+    console.log('[DM] 查找消息按钮...');
+    await delay(1);
+    
+    // 方法1: data-e2e 选择器
+    const msgBtn = $('[data-e2e="contact-msg-btn"], [data-e2e="message-button"]');
+    if (msgBtn && click(msgBtn)) {
+      console.log('[DM] 点击消息按钮成功');
+      await delay(2);
+      return true;
+    }
+    
+    // 方法2: 按文字找
+    const links = $$('a');
+    for (const a of links) {
+      const text = a.innerText?.trim().toLowerCase();
+      if (text === 'message' || text === '发消息') {
+        if (click(a)) {
+          console.log('[DM] 按文字点击消息按钮成功');
+          await delay(2);
+          return true;
+        }
+      }
+    }
+    
+    // 方法3: 找 message 相关的 href
+    const msgLinks = $$('a[href*="/message/"]');
+    if (msgLinks.length > 0 && click(msgLinks[0])) {
+      console.log('[DM] 点击 message 链接成功');
+      await delay(2);
+      return true;
+    }
+    
+    console.log('[DM] 未找到消息按钮');
+    return false;
+  }
+
+  // 等待私信对话框出现
+  async function waitForMessageDialog() {
+    console.log('[DM] 等待私信对话框...');
+    
+    for (let i = 0; i < 10; i++) {
+      await delay(0.5);
+      
+      // 检查是否有输入框出现
+      const inputArea = $('[data-e2e="message-input-area"]');
+      if (inputArea) {
+        console.log('[DM] 私信对话框已出现');
+        return true;
+      }
+      
+      // 检查是否有 dm 相关的 input
+      const dmEditor = $('[data-e2e="dm-new-input-editor"]');
+      if (dmEditor) {
+        console.log('[DM] DM编辑器已出现');
+        return true;
+      }
+    }
+    
+    console.log('[DM] 私信对话框未出现');
+    return false;
+  }
+
+  // 找到私信输入框
+  async function findInput() {
+    console.log('[DM] 查找输入框...');
+    
+    // 方法1: message-input-area
+    const inputArea = $('[data-e2e="message-input-area"]');
+    if (inputArea) {
+      console.log('[DM] 找到 message-input-area');
+      return inputArea;
+    }
+    
+    // 方法2: dm-new-input-editor
+    const dmEditor = $('[data-e2e="dm-new-input-editor"]');
+    if (dmEditor) {
+      console.log('[DM] 找到 dm-new-input-editor');
+      return dmEditor;
+    }
+    
+    // 方法3: contenteditable
+    const contenteditable = $('div[contenteditable="true"][aria-label="发送消息..."]');
+    if (contenteditable) {
+      console.log('[DM] 找到 contenteditable 输入框');
+      return contenteditable;
+    }
+    
+    // 方法4: DraftEditor
+    const draftEditor = $('.public-DraftEditor-content');
+    if (draftEditor) {
+      console.log('[DM] 找到 DraftEditor');
+      return draftEditor;
+    }
+    
+    console.log('[DM] 未找到输入框');
     return null;
   }
 
-  // 查找发送按钮
+  // 输入文字到私信框（Draft.js 兼容方式）
+  async function typeMessage(text) {
+    console.log('[DM] 输入私信:', text);
+    await delay(0.5);
+    
+    // 找到 contenteditable 元素
+    const editor = $('div[contenteditable="true"][aria-label="发送消息..."]');
+    if (!editor) {
+      console.log('[DM] 未找到 contenteditable 编辑器');
+      return false;
+    }
+    
+    // 聚焦
+    editor.focus();
+    await delay(0.2);
+    
+    // 选中文本并删除（清空现有内容）
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    
+    // 使用 execCommand 删除
+    document.execCommand('delete', false, null);
+    await delay(0.1);
+    
+    // 使用 execCommand insertText（Draft.js 监听这个命令）
+    document.execCommand('insertText', false, text);
+    await delay(0.3);
+    
+    // 检查输入结果
+    const entered = editor.innerText || editor.textContent || '';
+    console.log('[DM] 输入框内容:', entered.substring(0, 30) || '(空)');
+    
+    if (!entered.trim()) {
+      // execCommand 失败，尝试直接设置
+      console.log('[DM] execCommand 失败，尝试直接设置...');
+      
+      // 找到内部的 span[data-text="true"]
+      const span = $('span[data-text="true"]');
+      if (span) {
+        span.textContent = text;
+        // 触发 input 事件
+        span.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: text
+        }));
+        console.log('[DM] 直接设置 span[data-text] 成功');
+        return true;
+      }
+      
+      // 备选：操作 innerHTML
+      const contents = editor.querySelector('[data-contents="true"]');
+      if (contents) {
+        contents.innerHTML = `<div data-block="true" data-editor="xxx"><div class="public-DraftStyleDefault-block"><span data-text="true">${text}</span></div></div>`;
+        editor.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          cancelable: true
+        }));
+        console.log('[DM] 通过 innerHTML 设置成功');
+        return true;
+      }
+    }
+    
+    return true;
+  }
+
+  // 找到发送按钮
   async function findSendButton() {
-    console.log('[TikTok DM] 查找发送按钮...');
+    console.log('[DM] 查找发送按钮...');
     
-    // 注意：不能使用 :has-text() 这种 Playwright 语法，只能用 CSS 选择器或 XPath
-    const sendSelectors = [
-      // TikTok 当前的发送按钮
-      '[data-e2e="dm-new-send-btn"]',
-      // 备选
-      '[data-e2e="send-message-button"]',
-      'button[type="submit"]',
-      'button[class*="send"]',
-      'button[class*="Send"]',
-      // XPath 方式
-      '//button[contains(text(), "Send")]',
-      '//button[contains(text(), "发送")]'
-    ];
-    
-    const sendBtn = findElement(sendSelectors);
+    // 方法1: data-e2e 选择器（用户提供的）
+    const sendBtn = $('[data-e2e="dm-new-send-btn"]');
     if (sendBtn && sendBtn.offsetParent !== null) {
-      console.log('[TikTok DM] 找到发送按钮');
+      console.log('[DM] 找到发送按钮 dm-new-send-btn');
       return sendBtn;
     }
     
-    // 备选：找所有按钮，逐个检查
-    const allButtons = document.querySelectorAll('button');
-    for (const btn of allButtons) {
+    // 方法2: 其他 data-e2e
+    const sendBtn2 = $('[data-e2e="send-message-button"]');
+    if (sendBtn2 && sendBtn2.offsetParent !== null) {
+      console.log('[DM] 找到发送按钮 send-message-button');
+      return sendBtn2;
+    }
+    
+    // 方法3: submit 类型
+    const submitBtn = $('button[type="submit"]');
+    if (submitBtn && submitBtn.offsetParent !== null) {
+      console.log('[DM] 找到 submit 按钮');
+      return submitBtn;
+    }
+    
+    // 方法4: 按文字找
+    const buttons = $$('button');
+    for (const btn of buttons) {
       const text = btn.innerText?.trim().toLowerCase();
-      if (text === 'send' || text === '发送') {
-        console.log('[TikTok DM] 从所有按钮中找到发送按钮');
+      if ((text === 'send' || text === '发送') && btn.offsetParent !== null) {
+        console.log('[DM] 按文字找到发送按钮:', text);
         return btn;
       }
     }
     
-    // 备选：找可能包含发送图标的按钮
-    const iconButtons = document.querySelectorAll('button');
-    for (const btn of iconButtons) {
+    // 方法5: 找消息区域内的按钮
+    const inputArea = $('[data-e2e="message-input-area"]');
+    if (inputArea) {
+      const areaBtns = inputArea.querySelectorAll('button, [role="button"]');
+      for (const btn of areaBtns) {
+        if (btn.offsetParent !== null) {
+          const svg = btn.querySelector('svg');
+          if (svg) {
+            console.log('[DM] 找到输入区域内的 SVG 按钮');
+            return btn;
+          }
+        }
+      }
+    }
+    
+    // 方法6: 找所有可见按钮
+    for (const btn of buttons) {
       const svg = btn.querySelector('svg');
-      if (svg && btn.offsetParent !== null && btn.innerText.trim() === '') {
-        // 可能是只有图标的发送按钮
-        console.log('[TikTok DM] 找到图标按钮可能是发送按钮');
-        return btn;
+      if (svg && btn.offsetParent !== null) {
+        const fill = svg.getAttribute('fill');
+        if (fill && fill.includes('#FE2C55')) {
+          console.log('[DM] 找到粉红色 SVG 按钮（发送按钮）');
+          return btn;
+        }
       }
     }
     
+    console.log('[DM] 未找到发送按钮');
     return null;
   }
 
-  // 输入文本到 TikTok 私信输入框
-  function inputText(el, text) {
-    // 找到 div[data-e2e="message-input-area"] 内的 br[data-text="true"] 并替换为 span
-    const container = el.closest('div[data-e2e="message-input-area"]') || el;
-    const br = container.querySelector('br[data-text="true"]');
+  // 点击发送按钮
+  async function clickSend() {
+    console.log('[DM] 点击发送按钮...');
+    await delay(0.5);
     
-    if (br) {
-      // 创建新的 span 元素
-      const span = document.createElement('span');
-      span.setAttribute('data-text', 'true');
-      span.textContent = text;
-      
-      // 替换 br 为 span
-      br.parentNode.replaceChild(span, br);
-      
-      // 触发 input 事件
-      span.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text
-      }));
-      
-      console.log('[TikTok DM] 替换 br 为 span，输入:', text);
-    } else {
-      // 备选：直接在 innerHTML 里操作
-      const current = container.innerHTML;
-      const newHtml = current.replace(/<br data-text="true"><\/div>/, `<span data-text="true">${text}</span></div>`);
-      container.innerHTML = newHtml;
-      console.log('[TikTok DM] 通过 innerHTML 替换 br，输入:', text);
+    const sendBtn = await findSendButton();
+    if (!sendBtn) {
+      console.log('[DM] 未找到发送按钮');
+      return false;
     }
+    
+    if (click(sendBtn)) {
+      console.log('[DM] 点击发送按钮成功');
+      await delay(1);
+      return true;
+    }
+    
+    // 备选：dispatchEvent
+    sendBtn.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+    console.log('[DM] dispatchEvent 点击发送');
+    await delay(1);
+    return true;
   }
 
-  // 主发送流程
-  async function sendDirectMessage(message) {
+  // ========================================
+  // 主流程
+  // ========================================
+  
+  async function sendDM(message) {
     const username = getUsername();
-    console.log('[TikTok DM] 开始发送私信，当前用户:', username);
+    console.log('[DM] ===== 开始私信流程 =====');
+    console.log('[DM] 用户:', username);
     
     if (!username) {
       return { success: false, error: '无法获取用户名，请在达人主页使用' };
     }
 
     try {
-      // 步骤1：检查关注状态
-      console.log('[TikTok DM] 步骤1: 检查关注状态...');
-      const isFollowing = await checkIsFollowing();
+      // 步骤1: 检查并关注
+      console.log('[DM] 步骤1: 检查关注状态');
+      const isFollowing = await checkFollowing();
       
-      // 步骤2：如果未关注，先关注
       if (!isFollowing) {
-        console.log('[TikTok DM] 步骤2: 执行关注...');
-        const followed = await clickFollow();
-        if (!followed) {
-          return { success: false, error: '关注失败', step: '关注' };
-        }
-        console.log('[TikTok DM] 关注成功');
+        console.log('[DM] 步骤2: 执行关注');
+        await doFollow();
       } else {
-        console.log('[TikTok DM] 已关注，跳过关注步骤');
+        console.log('[DM] 步骤2: 已关注，跳过');
       }
 
-      // 步骤3：点击消息按钮
-      console.log('[TikTok DM] 步骤3: 点击消息按钮...');
-      const msgClicked = await clickMessageButton();
+      // 步骤3: 点击消息按钮
+      console.log('[DM] 步骤3: 点击消息按钮');
+      const msgClicked = await clickMessage();
       if (!msgClicked) {
-        return { success: false, error: '未找到消息按钮', step: '点击消息' };
+        return { success: false, error: '未找到消息按钮', step: '消息按钮' };
       }
 
-      // 步骤4：等待并找到输入框
-      console.log('[TikTok DM] 步骤4: 查找输入框...');
-      await randomDelay(1, 2);
-      const inputEl = await findMessageInput();
-      if (!inputEl) {
-        return { success: false, error: '未找到私信输入框', step: '查找输入框' };
+      // 步骤4: 等待对话框
+      console.log('[DM] 步骤4: 等待私信对话框');
+      const dialogAppeared = await waitForMessageDialog();
+      if (!dialogAppeared) {
+        return { success: false, error: '私信对话框未出现', step: '等待对话框' };
       }
 
-      // 步骤5：输入私信内容
-      console.log('[TikTok DM] 步骤5: 输入私信内容...');
-      await randomDelay(0.5, 1);
-      inputText(inputEl, message);
-
-      // 步骤6：查找并点击发送按钮
-      console.log('[TikTok DM] 步骤6: 查找发送按钮...');
-      await randomDelay(0.5, 1);
-      const sendBtn = await findSendButton();
-      
-      if (sendBtn) {
-        sendBtn.click();
-        console.log('[TikTok DM] 已点击发送按钮');
-      } else {
-        // 备选：按 Enter 发送
-        console.log('[TikTok DM] 未找到发送按钮，尝试按 Enter...');
-        const enterEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-        inputEl.dispatchEvent(enterEvent);
-        
-        const enterUp = new KeyboardEvent('keyup', {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true
-        });
-        inputEl.dispatchEvent(enterUp);
+      // 步骤5: 输入文字
+      console.log('[DM] 步骤5: 输入私信内容');
+      const inputFound = await findInput();
+      if (!inputFound) {
+        return { success: false, error: '未找到输入框', step: '输入框' };
       }
+      await typeMessage(message);
 
-      await randomDelay(1, 2);
+      // 步骤6: 点击发送
+      console.log('[DM] 步骤6: 点击发送');
+      await clickSend();
 
-      // 检查是否发送成功（看输入框是否被清空）
-      const stillHasText = inputEl.innerText.trim().length > 0;
-      if (stillHasText) {
-        // 可能发送成功也可能没有，保守返回成功
-        console.log('[TikTok DM] 发送完成');
-      } else {
-        console.log('[TikTok DM] 输入框已清空，可能发送成功');
-      }
+      console.log('[DM] ===== 私信流程完成 =====');
+      return { success: true, username };
 
-      return { success: true, username: username };
-
-    } catch (error) {
-      console.error('[TikTok DM] 发送失败:', error);
-      return { success: false, error: error.message };
+    } catch (err) {
+      console.error('[DM] 私信流程出错:', err);
+      return { success: false, error: err.message };
     }
   }
 
-  // 监听来自 popup 的消息
-  chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    console.log('[TikTok DM] 收到消息:', request.action);
+  // ========================================
+  // 消息监听
+  // ========================================
+  
+  chrome.runtime.onMessage.addListener((req, res) => {
+    console.log('[DM] 收到消息:', req.action);
 
-    if (request.action === 'test') {
-      const username = getUsername();
-      sendResponse({ 
-        success: true, 
-        username: username || '未知用户',
-        url: window.location.href
-      });
+    if (req.action === 'test') {
+      res({ success: true, username: getUsername() || '未知' });
     } 
-    else if (request.action === 'sendDM') {
-      sendDirectMessage(request.message).then(result => {
-        sendResponse(result);
-      });
+    else if (req.action === 'sendDM') {
+      sendDM(req.message).then(result => res(result));
       return true; // 异步响应
     }
   });
 
-  console.log('[TikTok DM] TikTok DM Extension loaded, username:', getUsername());
+  console.log('[DM] TikTok DM 插件已加载, 用户:', getUsername());
 })();
