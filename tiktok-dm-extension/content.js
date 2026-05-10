@@ -360,6 +360,104 @@
     return null;
   }
 
+  // ========================================
+  // React 事件触发工具
+  // ========================================
+  
+  // 获取 React fiber（如果可用）
+  function getReactFiber(element) {
+    // React 17+ 使用 root
+    const key = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
+    if (key) return element[key];
+    // React 15
+    const key15 = Object.keys(element).find(k => k.startsWith('__reactInternalInstance$'));
+    if (key15) return element[key15];
+    return null;
+  }
+  
+  // 获取 React root 元素
+  function getReactRoot(element) {
+    let current = element;
+    while (current) {
+      const key = Object.keys(current).find(k => k.startsWith('__reactRoot$'));
+      if (key) return current[key];
+      const key2 = Object.keys(current).find(k => k.startsWith('_reactRootContainer'));
+      if (key2) return current[key2];
+      current = current.parentElement;
+    }
+    // 尝试从 document.body
+    const bodyKey = Object.keys(document.body).find(k => k.startsWith('__reactRoot'));
+    if (bodyKey) return document.body[bodyKey];
+    return null;
+  }
+
+  // 通过 React 内部机制触发更新
+  function dispatchReactChange(element, text) {
+    // 方法1: 尝试获取 fiber 并直接操作
+    const fiber = getReactFiber(element);
+    if (fiber) {
+      console.log('[DM] 找到 React fiber');
+      try {
+        // React 16+ 的方式
+        if (fiber.memoizedProps && fiber.memoizedProps.onChange) {
+          console.log('[DM] 调用 fiber.memoizedProps.onChange');
+          // 创建一个模拟事件
+          const mockEvent = {
+            target: element,
+            currentTarget: element,
+            bubbles: true,
+            cancelable: true,
+            defaultPrevented: false,
+            isDefaultPrevented: () => false,
+            isPropagationStopped: () => false,
+            isTrusted: false,
+            nativeEvent: null,
+            persist: () => {},
+            preventDefault: () => {},
+            stopPropagation: () => {},
+            timeStamp: Date.now(),
+            type: 'change'
+          };
+          fiber.memoizedProps.onChange(mockEvent);
+          return true;
+        }
+      } catch (e) {
+        console.log('[DM] fiber onChange 调用失败:', e.message);
+      }
+    }
+    
+    // 方法2: 通过 React 事件系统派发
+    const reactRoot = getReactRoot(element);
+    if (reactRoot) {
+      console.log('[DM] 找到 React root');
+    }
+    
+    return false;
+  }
+
+  // 通过 clipboard 粘贴（最接近真实用户）
+  async function pasteText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      console.log('[DM] 已写入剪贴板');
+      return true;
+    } catch (e) {
+      console.log('[DM] clipboard 写入失败:', e.message);
+      return false;
+    }
+  }
+
+  // 使用 execCommand insertText（Draft.js/React 的推荐方式）
+  function execInsertText(text) {
+    const result = document.execCommand('insertText', false, text);
+    console.log('[DM] execCommand insertText:', result);
+    return result;
+  }
+
+  // ========================================
+  // 核心输入函数
+  // ========================================
+  
   // 输入文字 - 多种策略
   async function typeMessage(text) {
     console.log('[DM] 输入私信:', text);
@@ -387,152 +485,277 @@
     return false;
   }
 
-  // contenteditable 输入策略
+  // contenteditable 输入策略 - 修复 React/Draft.js 兼容性
   async function typeInContentEditable(editor, text) {
-    console.log('[DM] 使用 contenteditable 策略...');
+    console.log('[DM] 使用 contenteditable 策略 (React优化版)...');
     
     // 聚焦
     editor.focus();
+    await delay(0.5);
+    
+    // 先清空现有内容
+    editor.innerHTML = '';
     await delay(0.3);
     
-    // 清除现有内容（如果有）
-    editor.innerHTML = '';
-    await delay(0.2);
-    
-    // 方法1: 直接设置文本（适用于 Draft.js/React）
-    // 先清空
-    const selection = window.getSelection();
+    // ========== 策略1: execCommand insertText（首选，最接近真实输入）==========
+    console.log('[DM] 策略1: execCommand insertText');
+    const sel = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(editor);
     range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    sel.removeAllRanges();
+    sel.addRange(range);
     
-    // 删除现有内容
-    document.execCommand('delete', false, null);
-    await delay(0.2);
-    
-    // 方法2: 模拟每个字符输入（最可靠）
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      
-      // 方法2.1: execCommand insertText（Draft.js 通常支持）
-      const inserted = document.execCommand('insertText', false, char);
-      
-      if (!inserted) {
-        // 方法2.2: 手动 DOM 操作
-        const currentContent = editor.innerText || '';
-        editor.innerText = currentContent + char;
-      }
-      
-      // 触发 input 事件
-      editor.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: char
-      }));
-      
-      // 触发 beforeinput 事件（某些框架需要）
-      editor.dispatchEvent(new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: char
-      }));
-      
-      await delay(0.02); // 模拟打字速度
-    }
-    
+    const inserted = execInsertText(text);
     await delay(0.3);
     
-    // 验证输入
-    const result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 输入结果:', result.substring(0, 50));
+    // 验证
+    let result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略1 结果:', result.substring(0, 50), '长度:', result.length);
     
-    if (result.includes(text.substring(0, 10))) {
-      console.log('[DM] 输入成功');
+    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略1 成功!');
       return true;
     }
     
-    // 备选：直接设置 innerText
-    editor.innerText = text;
-    editor.dispatchEvent(new InputEvent('input', {
+    // ========== 策略2: Clipboard 粘贴 ==========
+    console.log('[DM] 策略2: Clipboard 粘贴');
+    editor.innerHTML = '';
+    editor.focus();
+    await delay(0.3);
+    
+    try {
+      // 使用 execCommand 粘贴
+      const pasted = document.execCommand('paste', false, null);
+      console.log('[DM] execCommand paste:', pasted);
+    } catch (e) {
+      console.log('[DM] execCommand paste 失败');
+    }
+    
+    // 尝试 navigator.clipboard
+    const clipboardWorked = await pasteText(text);
+    if (clipboardWorked) {
+      try {
+        document.execCommand('paste', false, null);
+      } catch (e) {}
+    }
+    
+    // 手动派发 paste 事件
+    editor.dispatchEvent(new ClipboardEvent('paste', {
       bubbles: true,
       cancelable: true,
-      inputType: 'insertFromPaste'
+      clipboardData: new DataTransfer()
     }));
     
-    return true;
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略2 结果:', result.substring(0, 50));
+    
+    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略2 成功!');
+      return true;
+    }
+    
+    // ========== 策略3: 手动 DOM 操作 + React 事件 ==========
+    console.log('[DM] 策略3: 手动 DOM + React 事件');
+    editor.innerHTML = '';
+    await delay(0.3);
+    
+    // 创建文本节点
+    const textNode = document.createTextNode(text);
+    editor.appendChild(textNode);
+    await delay(0.2);
+    
+    // 设置 Selection
+    const newSel = window.getSelection();
+    const newRange = document.createRange();
+    newRange.selectNodeContents(editor);
+    newRange.collapse(false);
+    newSel.removeAllRanges();
+    newSel.addRange(newRange);
+    
+    // 派发多个事件确保 React 捕获
+    const events = [
+      new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }),
+      new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }),
+      new Event('change', { bubbles: true }),
+    ];
+    
+    for (const evt of events) {
+      editor.dispatchEvent(evt);
+    }
+    
+    // 尝试 React 方法
+    dispatchReactChange(editor, text);
+    
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略3 结果:', result.substring(0, 50));
+    
+    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略3 成功!');
+      return true;
+    }
+    
+    // ========== 策略4: 尝试 Draft.js 的 br[data-text] 结构 ==========
+    console.log('[DM] 策略4: Draft.js br[data-text] 结构');
+    editor.innerHTML = '';
+    await delay(0.3);
+    
+    // 创建类似 Draft.js 的结构
+    const span = document.createElement('span');
+    span.setAttribute('data-text', 'true');
+    span.textContent = text;
+    editor.appendChild(span);
+    
+    // 派发事件
+    editor.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: true, inputType: 'insertText', data: text
+    }));
+    
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略4 结果:', result.substring(0, 50));
+    
+    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略4 成功!');
+      return true;
+    }
+    
+    // ========== 策略5: 最后的备选 - 直接 innerText ==========
+    console.log('[DM] 策略5: 直接 innerText (最后备选)');
+    editor.innerText = text;
+    
+    // 触发多个事件
+    editor.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: text
+    }));
+    editor.dispatchEvent(new InputEvent('change', { bubbles: true }));
+    
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略5 结果:', result);
+    
+    return result.includes(text.substring(0, Math.min(5, text.length)));
   }
 
-  // input/textarea 输入策略
+  // input/textarea 输入策略 - 修复 React 兼容性
   async function typeInInput(input, text) {
-    console.log('[DM] 使用 input/textarea 策略...');
+    console.log('[DM] 使用 input/textarea 策略 (React优化版)...');
     
     // 聚焦
     input.focus();
     await delay(0.3);
     
-    // 清除现有内容
+    // ========== 策略1: 直接设置 value + 手动事件 ==========
+    console.log('[DM] 策略1: 直接设置 value');
     input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
     await delay(0.2);
     
-    // 方法1: 直接设置 value（React/Angular 触发）
-    input.value = text;
-    input.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      cancelable: true,
-      inputType: 'insertText',
-      data: text
-    }));
+    // 模拟每个字符输入
+    for (let i = 0; i < text.length; i++) {
+      // React 需要 keyPress 后再改 value
+      input.dispatchEvent(new KeyboardEvent('keyPress', {
+        bubbles: true,
+        cancelable: true,
+        key: text[i],
+        charCode: text.charCodeAt(i)
+      }));
+      
+      input.value = text.substring(0, i + 1);
+      
+      input.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text[i]
+      }));
+      
+      await delay(0.02);
+    }
+    
+    // 触发 change
     input.dispatchEvent(new Event('change', { bubbles: true }));
     
     await delay(0.3);
+    console.log('[DM] 策略1 结果:', input.value);
     
-    // 方法2: 模拟键盘输入
-    if (!input.value) {
-      // 模拟每个字符
-      for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        
-        // 触发 keydown
-        input.dispatchEvent(new KeyboardEvent('keydown', {
-          bubbles: true,
-          cancelable: true,
-          key: char,
-          keyCode: char.charCodeAt(0)
-        }));
-        
-        // 触发 keypress
-        input.dispatchEvent(new KeyboardEvent('keypress', {
-          bubbles: true,
-          cancelable: true,
-          key: char,
-          keyCode: char.charCodeAt(0)
-        }));
-        
-        // 更新 value
-        input.value = input.value + char;
-        
-        // 触发 input
-        input.dispatchEvent(new InputEvent('input', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: char
-        }));
-        
-        await delay(0.02);
+    if (input.value.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略1 成功!');
+      return true;
+    }
+    
+    // ========== 策略2: 尝试 React fiber ==========
+    console.log('[DM] 策略2: React fiber');
+    const fiber = getReactFiber(input);
+    if (fiber) {
+      console.log('[DM] 找到 input React fiber');
+      try {
+        // 尝试调用 internal props 的 setter
+        if (fiber.memoizedProps) {
+          // React 16
+          const originalValue = input.value;
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+            .set.call(input, text);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch (e) {
+        console.log('[DM] React fiber 策略失败:', e.message);
       }
     }
     
     await delay(0.3);
+    console.log('[DM] 策略2 结果:', input.value);
     
-    console.log('[DM] 输入值:', input.value.substring(0, 30));
-    return !!input.value;
+    if (input.value.includes(text.substring(0, Math.min(10, text.length)))) {
+      console.log('[DM] 策略2 成功!');
+      return true;
+    }
+    
+    // ========== 策略3: setTimeout 绕过 React 批处理 ==========
+    console.log('[DM] 策略3: setTimeout 绕过批处理');
+    return new Promise(resolve => {
+      let result = '';
+      
+      // 聚焦
+      input.focus();
+      
+      // 使用 setTimeout 确保每个输入都被 React 处理
+      let i = 0;
+      function typeNext() {
+        if (i < text.length) {
+          const char = text[i++];
+          
+          // 触发 keydown
+          const keydownEvent = new KeyboardEvent('keydown', {
+            bubbles: true, cancelable: true, key: char, charCode: char.charCodeAt(0)
+          });
+          input.dispatchEvent(keydownEvent);
+          
+          // 同步设置 value
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            input.tagName.toLowerCase() === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+            'value'
+          ).set;
+          nativeInputValueSetter.call(input, text.substring(0, i));
+          
+          // 触发 input
+          const inputEvent = new InputEvent('input', {
+            bubbles: true, cancelable: true, inputType: 'insertText', data: char
+          });
+          input.dispatchEvent(inputEvent);
+          
+          setTimeout(typeNext, 30);
+        } else {
+          // 完成
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          resolve(input.value.includes(text.substring(0, Math.min(10, text.length))));
+        }
+      }
+      
+      typeNext();
+    });
   }
 
   // ========================================
