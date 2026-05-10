@@ -175,15 +175,14 @@
     console.log('[TikTok DM] 查找私信输入框...');
     
     const inputSelectors = [
-      // TikTok 私信输入框 - 匹配带 aria-label 的 contenteditable div
+      // TikTok 私信输入框
+      'div[data-e2e="dm-new-input-editor"]',
       'div[contenteditable="true"][aria-label="发送消息..."]',
-      'div[contenteditable="true"][role="textbox"]',
       'div.public-DraftEditor-content',
-      'div[contenteditable="true"][data-lexical-editor="true"]',
+      'span[data-text="true"]',
       // 备选
       'textarea[id*="message"]',
-      'textarea[id*="dm"]',
-      'input[id*="message"]'
+      'textarea[id*="dm"]'
     ];
     
     const inputEl = findElement(inputSelectors);
@@ -256,53 +255,37 @@
 
   // 输入文本到 contentEditable 元素
   function inputText(el, text) {
-    // 如果是 div 直接操作
-    if (el.tagName === 'DIV' && el.getAttribute('contenteditable') === 'true') {
-      el.focus();
-      
-      // 方法1：execCommand insertText（最接近真实输入）
-      document.execCommand('selectAll', false, null);
+    // TikTok 使用 Draft.js，先聚焦然后用 insertText
+    const target = el.tagName === 'DIV' ? el : el;
+    target.focus();
+    
+    // Draft.js 兼容方式：使用 insertText
+    document.execCommand('selectAll', false, null);
+    document.execCommand('delete', false, null);
+    
+    // 等待 focus 生效
+    setTimeout(() => {
       document.execCommand('insertText', false, text);
       
-      // 检查结果
-      const currentText = el.innerText || el.textContent || '';
-      if (currentText.trim() === text.trim()) {
-        console.log('[TikTok DM] 输入成功 (execCommand):', currentText.substring(0, 20));
-        return;
+      // 检查输入结果
+      const actualText = target.innerText || target.textContent || '';
+      console.log('[TikTok DM] 输入内容:', actualText || text);
+      
+      // 如果 innerText 为空，尝试直接操作 span[data-text]
+      if (!actualText.trim()) {
+        const span = target.querySelector('span[data-text="true"]');
+        if (span) {
+          span.textContent = text;
+          span.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data: text
+          }));
+          console.log('[TikTok DM] 直接写入 span[data-text]:', text);
+        }
       }
-      
-      // 方法2：直接设置 textContent
-      el.textContent = '';
-      el.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text
-      }));
-      
-      const el2 = el.querySelector('span[data-offset-key]') || el;
-      el2.textContent = text;
-      el2.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text
-      }));
-      
-      console.log('[TikTok DM] 输入内容:', el.innerText || el.textContent);
-      return;
-    }
-    
-    // 如果是 span 或其他元素
-    el.focus();
-    el.textContent = text;
-    el.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      cancelable: true,
-      inputType: 'insertText',
-      data: text
-    }));
-    console.log('[TikTok DM] 输入内容:', text);
+    }, 100);
   }
 
   // 主发送流程
