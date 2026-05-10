@@ -1,4 +1,4 @@
-// content.js - TikTok 私信发送插件 (Codex 优化版)
+// content.js - TikTok 私信发送插件 (Codex 完整修复版)
 // 适配 TikTok 动态文本框和发送按钮
 (function() {
   'use strict';
@@ -7,20 +7,17 @@
   // 工具函数
   // ========================================
   
-  // 从 URL 提取用户名
   function getUsername() {
     const match = window.location.pathname.match(/^\/@([^\/]+)/);
     return match ? match[1] : null;
   }
 
-  // 随机延迟（秒）
   function delay(sec) {
     const actual = sec || (5 + Math.random() * 5);
     console.log('[DM] 等待', actual.toFixed(1), '秒...');
     return new Promise(resolve => setTimeout(resolve, actual * 1000));
   }
 
-  // 查找单个元素（支持 XPath）
   function $(selector, ctx = document) {
     if (!selector) return null;
     if (selector.startsWith('//')) {
@@ -30,7 +27,6 @@
     return ctx.querySelector(selector);
   }
 
-  // 查找所有匹配元素
   function $$(selector, ctx = document) {
     if (selector.startsWith('//')) {
       const result = document.evaluate(selector, ctx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -43,7 +39,6 @@
     return Array.from(ctx.querySelectorAll(selector));
   }
 
-  // 点击元素
   function click(el) {
     if (!el) return false;
     const rect = el.getBoundingClientRect();
@@ -52,31 +47,6 @@
     return true;
   }
 
-  // 安全点击（带事件派发）
-  function safeClick(el) {
-    if (!el) return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
-    
-    // 优先使用 click()
-    el.click();
-    
-    // 如果 click() 无效，尝试 dispatchEvent
-    if (!el.disabled && el.offsetParent !== null) {
-      el.dispatchEvent(new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      }));
-    }
-    return true;
-  }
-
-  // ========================================
-  // 动态检测工具
-  // ========================================
-  
-  // 等待元素出现
   async function waitForElement(selector, timeout = 10000, interval = 500) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
@@ -87,7 +57,6 @@
     return null;
   }
 
-  // 等待函数返回 true
   async function waitFor(fn, timeout = 10000, interval = 500) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
@@ -98,446 +67,215 @@
   }
 
   // ========================================
-  // 关注功能
+  // React 内部机制
   // ========================================
   
-  // 检查是否已关注
-  async function checkFollowing() {
-    await delay();
-    
-    // 方法1: 检查已关注按钮 (data-e2e)
-    const followingBtn = $('[data-e2e="following-button"]');
-    if (followingBtn && followingBtn.offsetParent !== null) {
-      console.log('[DM] 已关注 (方法1: data-e2e)');
-      return true;
-    }
-    
-    // 方法2: 检查关注按钮是否存在
-    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
-    if (followBtn && followBtn.offsetParent !== null) {
-      console.log('[DM] 未关注 (方法2: 关注按钮存在)');
-      return false;
-    }
-    
-    // 方法3: 检查按钮文字
-    const buttons = $$('button');
-    for (const btn of buttons) {
-      const text = btn.innerText?.trim().toLowerCase();
-      if (text === 'following') return true;
-      if (text === 'follow') return false;
-    }
-    
-    return false;
-  }
-
-  // 点击关注
-  async function doFollow() {
-    console.log('[DM] 执行关注...');
-    await delay();
-    
-    // 方法1: data-e2e 选择器
-    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
-    if (followBtn && click(followBtn)) {
-      console.log('[DM] 点击关注按钮成功 (方法1)');
-      await delay();
-      return true;
-    }
-    
-    // 方法2: 按文字找按钮
-    const buttons = $$('button');
-    for (const btn of buttons) {
-      if (btn.innerText?.trim().toLowerCase() === 'follow' && btn.offsetParent !== null) {
-        if (click(btn)) {
-          console.log('[DM] 按文字点击关注成功 (方法2)');
-          await delay();
-          return true;
-        }
-      }
-    }
-    
-    console.log('[DM] 未找到关注按钮');
-    return false;
-  }
-
-  // ========================================
-  // 私信功能 - 核心修复
-  // ========================================
-  
-  // 点击消息按钮
-  async function clickMessage() {
-    console.log('[DM] 查找消息按钮...');
-    await delay();
-    
-    // 构建所有可能的消息按钮选择器
-    const selectors = [
-      // data-e2e 属性
-      '[data-e2e="contact-msg-btn"]',
-      '[data-e2e="message-button"]',
-      '[data-e2e="dm-tab-btn"]',
-      // aria 属性
-      '[aria-label*="message" i]',
-      '[aria-label*="消息" i]',
-      '[aria-label*="Message" i]',
-      // a 标签链接
-      'a[href*="/message/"]',
-      'a[href*="/messages/"]',
-      // 通用
-      '[class*="message"][class*="btn"]',
-      '[class*="msg"][class*="btn"]',
-    ];
-    
-    for (const sel of selectors) {
-      const el = $(sel);
-      if (el && click(el)) {
-        console.log('[DM] 点击消息按钮成功:', sel);
-        await delay();
-        return true;
-      }
-    }
-    
-    // 方法2: 按文字找
-    const links = $$('a');
-    for (const a of links) {
-      const text = a.innerText?.trim().toLowerCase();
-      if (text === 'message' || text === '发消息' || text === '私信') {
-        if (click(a)) {
-          console.log('[DM] 按文字点击消息按钮成功');
-          await delay();
-          return true;
-        }
-      }
-    }
-    
-    console.log('[DM] 未找到消息按钮');
-    return false;
-  }
-
-  // 等待私信对话框出现
-  async function waitForMessageDialog() {
-    console.log('[DM] 等待私信对话框...');
-    
-    // 方法1: 等待 DM 特定元素出现
-    const dialogSelectors = [
-      // 常见 DM 输入区属性
-      '[data-e2e="message-input-area"]',
-      '[data-e2e="dm-new-input-editor"]',
-      '[data-e2e="dm-editor"]',
-      '[data-e2e="message-textarea"]',
-      // contenteditable
-      'div[contenteditable="true"][aria-label*="message" i]',
-      'div[contenteditable="true"][aria-label*="消息" i]',
-      'div[contenteditable="true"][aria-label*="发送" i]',
-      // 可能的容器
-      '[class*="dm-editor"]',
-      '[class*="message-editor"]',
-      '[class*="compose-editor"]',
-    ];
-    
-    for (let i = 0; i < 20; i++) {
-      await delay(0.5);
-      
-      for (const sel of dialogSelectors) {
-        const el = $(sel);
-        if (el && el.offsetParent !== null) {
-          console.log('[DM] 私信对话框已出现:', sel);
-          return true;
-        }
-      }
-      
-      // 也检查 body 中是否有 DM 相关的 URL
-      if (window.location.pathname.includes('/messages/') || 
-          window.location.hash.includes('#/messages')) {
-        console.log('[DM] 检测到 messages URL');
-        await delay(1);
-        return true;
-      }
-    }
-    
-    console.log('[DM] 私信对话框未出现');
-    return false;
-  }
-
-  // ========================================
-  // 输入框定位与输入 - 核心修复
-  // ========================================
-  
-  // 深度查找输入框（递归搜索 Shadow DOM 和 iframe）
-  function deepFindInput(root = document) {
-    // 直接检查 contenteditable
-    const editable = root.querySelector('div[contenteditable="true"]');
-    if (editable) {
-      const label = editable.getAttribute('aria-label') || '';
-      if (/message|消息|send|发送/i.test(label)) {
-        return { type: 'contenteditable', el: editable };
-      }
-    }
-    
-    // 检查 textarea
-    const textarea = root.querySelector('textarea[placeholder*="message" i], textarea[placeholder*="消息" i]');
-    if (textarea) {
-      return { type: 'textarea', el: textarea };
-    }
-    
-    // 检查 input
-    const input = root.querySelector('input[placeholder*="message" i], input[placeholder*="消息" i]');
-    if (input) {
-      return { type: 'input', el: input };
-    }
-    
-    // 搜索所有可能包含输入框的容器
-    const containers = root.querySelectorAll('[data-e2e*="input"], [data-e2e*="editor"], [data-e2e*="compose"]');
-    for (const container of containers) {
-      const editable = container.querySelector('div[contenteditable="true"]');
-      if (editable) {
-        return { type: 'contenteditable', el: editable };
-      }
-      const textarea = container.querySelector('textarea');
-      if (textarea) {
-        return { type: 'textarea', el: textarea };
-      }
-    }
-    
-    return null;
-  }
-
-  // 找到私信输入框
-  async function findInput() {
-    console.log('[DM] 查找输入框...');
-    await delay();
-    
-    // 先尝试等待对话框稳定
-    await waitFor(() => !!deepFindInput(), 5000, 300);
-    
-    // 方法1: deepFindInput 智能查找
-    const found = deepFindInput();
-    if (found) {
-      console.log('[DM] 找到输入框类型:', found.type);
-      return found.el;
-    }
-    
-    // 方法2: 直接查询各种可能的选择器
-    const selectors = [
-      // data-e2e
-      '[data-e2e="message-input-area"]',
-      '[data-e2e="dm-new-input-editor"]',
-      '[data-e2e="dm-editor"]',
-      '[data-e2e="message-textarea"]',
-      '[data-e2e="new-message-input"]',
-      // contenteditable
-      'div[contenteditable="true"][aria-label*="message"]',
-      'div[contenteditable="true"][aria-label*="消息"]',
-      'div[contenteditable="true"][aria-label*="发送"]',
-      'div[contenteditable="true"][aria-label*="Send"]',
-      // textarea
-      'textarea[class*="message"]',
-      'textarea[class*="dm-"]',
-      'textarea[class*="compose"]',
-      // input
-      'input[class*="message"]',
-      'input[class*="dm-"]',
-    ];
-    
-    for (const sel of selectors) {
-      const el = $(sel);
-      if (el && el.offsetParent !== null) {
-        console.log('[DM] 找到输入框:', sel);
-        return el;
-      }
-    }
-    
-    // 方法3: 搜索 body 中所有的 contenteditable
-    const allEditable = $$('div[contenteditable="true"]');
-    for (const el of allEditable) {
-      const label = el.getAttribute('aria-label') || '';
-      const role = el.getAttribute('role') || '';
-      if (/message|消息|send|发送/i.test(label) || role === 'textbox') {
-        console.log('[DM] 从所有 contenteditable 中找到:', label);
-        return el;
-      }
-    }
-    
-    console.log('[DM] 未找到输入框');
-    return null;
-  }
-
-  // ========================================
-  // React 事件触发工具
-  // ========================================
-  
-  // 获取 React fiber（如果可用）
-  function getReactFiber(element) {
-    // React 17+ 使用 root
-    const key = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
-    if (key) return element[key];
-    // React 15
-    const key15 = Object.keys(element).find(k => k.startsWith('__reactInternalInstance$'));
-    if (key15) return element[key15];
-    return null;
+  // 获取 React fiber
+  function getReactFiber(dom) {
+    const keys = Object.keys(dom).filter(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    return keys.length ? dom[keys[0]] : null;
   }
   
-  // 获取 React root 元素
-  function getReactRoot(element) {
-    let current = element;
+  // 获取元素的最近 React 组件实例
+  function getReactComponent(dom) {
+    let current = dom;
     while (current) {
-      const key = Object.keys(current).find(k => k.startsWith('__reactRoot$'));
-      if (key) return current[key];
-      const key2 = Object.keys(current).find(k => k.startsWith('_reactRootContainer'));
-      if (key2) return current[key2];
+      const fiber = getReactFiber(current);
+      if (fiber) return fiber;
       current = current.parentElement;
     }
-    // 尝试从 document.body
-    const bodyKey = Object.keys(document.body).find(k => k.startsWith('__reactRoot'));
-    if (bodyKey) return document.body[bodyKey];
     return null;
   }
 
-  // 通过 React 内部机制触发更新
-  function dispatchReactChange(element, text) {
-    // 方法1: 尝试获取 fiber 并直接操作
-    const fiber = getReactFiber(element);
-    if (fiber) {
-      console.log('[DM] 找到 React fiber');
-      try {
-        // React 16+ 的方式
-        if (fiber.memoizedProps && fiber.memoizedProps.onChange) {
-          console.log('[DM] 调用 fiber.memoizedProps.onChange');
-          // 创建一个模拟事件
-          const mockEvent = {
-            target: element,
-            currentTarget: element,
-            bubbles: true,
-            cancelable: true,
-            defaultPrevented: false,
-            isDefaultPrevented: () => false,
-            isPropagationStopped: () => false,
-            isTrusted: false,
-            nativeEvent: null,
-            persist: () => {},
-            preventDefault: () => {},
-            stopPropagation: () => {},
-            timeStamp: Date.now(),
-            type: 'change'
-          };
-          fiber.memoizedProps.onChange(mockEvent);
-          return true;
-        }
-      } catch (e) {
-        console.log('[DM] fiber onChange 调用失败:', e.message);
-      }
-    }
-    
-    // 方法2: 通过 React 事件系统派发
-    const reactRoot = getReactRoot(element);
-    if (reactRoot) {
-      console.log('[DM] 找到 React root');
-    }
-    
-    return false;
-  }
-
-  // 通过 clipboard 粘贴（最接近真实用户）
-  async function pasteText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      console.log('[DM] 已写入剪贴板');
-      return true;
-    } catch (e) {
-      console.log('[DM] clipboard 写入失败:', e.message);
-      return false;
-    }
-  }
-
-  // 使用 execCommand insertText（Draft.js/React 的推荐方式）
-  function execInsertText(text) {
-    const result = document.execCommand('insertText', false, text);
-    console.log('[DM] execCommand insertText:', result);
-    return result;
-  }
-
   // ========================================
-  // 核心输入函数
+  // 核心输入函数 - 完整重写
   // ========================================
   
-  // 输入文字 - 多种策略
-  async function typeMessage(text) {
-    console.log('[DM] 输入私信:', text);
-    
-    const input = await findInput();
-    if (!input) {
-      console.log('[DM] 未找到输入框');
-      return false;
-    }
-    
-    await delay();
-    
-    // 根据输入框类型采用不同策略
-    const tagName = input.tagName.toLowerCase();
-    const isContentEditable = input.isContentEditable;
-    
-    console.log('[DM] 输入框类型:', tagName, 'contenteditable:', isContentEditable);
-    
-    if (isContentEditable) {
-      return await typeInContentEditable(input, text);
-    } else if (tagName === 'textarea' || tagName === 'input') {
-      return await typeInInput(input, text);
-    }
-    
-    return false;
-  }
-
-  // contenteditable 输入策略 - 修复 React/Draft.js 兼容性
+  // 安全的 contenteditable 输入
   async function typeInContentEditable(editor, text) {
-    console.log('[DM] 使用 contenteditable 策略 (React优化版)...');
+    console.log('[DM] ===== contenteditable 输入开始 =====');
+    console.log('[DM] 编辑器信息:', {
+      tagName: editor.tagName,
+      className: editor.className.substring(0, 80),
+      ariaLabel: editor.getAttribute('aria-label'),
+      contenteditable: editor.contentEditable,
+      childCount: editor.children.length,
+      innerHTML: editor.innerHTML.substring(0, 100)
+    });
     
     // 聚焦
     editor.focus();
-    await delay(0.5);
+    await delay(0.3);
     
-    // 先清空现有内容
+    // 清空现有内容
     editor.innerHTML = '';
-    await delay(0.3);
+    await delay(0.2);
     
-    // ========== 策略1: execCommand insertText（首选，最接近真实输入）==========
-    console.log('[DM] 策略1: execCommand insertText');
+    // ========== 策略A: execCommand insertText（最接近真实输入）==========
+    console.log('[DM] 策略A: execCommand insertText');
+    
+    // 设置 Selection 到编辑器末尾
     const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
+    sel.selectAllChildren(editor);
+    sel.collapseToEnd();
     
-    const inserted = execInsertText(text);
+    // 尝试插入
+    const inserted = document.execCommand('insertText', false, text);
+    console.log('[DM] insertText 结果:', inserted);
+    
     await delay(0.3);
-    
-    // 验证
     let result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 策略1 结果:', result.substring(0, 50), '长度:', result.length);
+    console.log('[DM] 策略A 结果:', result.substring(0, 50), '| 长度:', result.length);
     
-    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略1 成功!');
+    if (result.trim().length >= text.length * 0.8) {
+      console.log('[DM] 策略A 成功!');
       return true;
     }
     
-    // ========== 策略2: Clipboard 粘贴 ==========
-    console.log('[DM] 策略2: Clipboard 粘贴');
+    // ========== 策略B: 手动派发完整事件序列 ==========
+    console.log('[DM] 策略B: 手动派发完整事件序列');
+    editor.innerHTML = '';
+    editor.focus();
+    await delay(0.3);
+    
+    // 1. 设置 Selection
+    const newSel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    newSel.removeAllRanges();
+    newSel.addRange(range);
+    
+    // 2. 逐字符模拟
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      
+      // beforeinput 事件
+      const beforeInput = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: char
+      });
+      editor.dispatchEvent(beforeInput);
+      
+      // 直接操作 DOM
+      const textNode = document.createTextNode(char);
+      editor.appendChild(textNode);
+      
+      // 更新 Selection
+      const curSel = window.getSelection();
+      const curRange = document.createRange();
+      curRange.selectNodeContents(editor);
+      curRange.collapse(false);
+      curSel.removeAllRanges();
+      curSel.addRange(curRange);
+      
+      // input 事件
+      const inputEvt = new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: char
+      });
+      editor.dispatchEvent(inputEvt);
+      
+      await delay(0.01);
+    }
+    
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略B 结果:', result.substring(0, 50), '| 长度:', result.length);
+    
+    if (result.trim().length >= text.length * 0.8) {
+      console.log('[DM] 策略B 成功!');
+      return true;
+    }
+    
+    // ========== 策略C: React synthetic event ==========
+    console.log('[DM] 策略C: React synthetic event');
+    editor.innerHTML = '';
+    editor.focus();
+    await delay(0.3);
+    
+    // 创建完整的 React 兼容事件
+    const reactEvent = {
+      target: editor,
+      currentTarget: editor,
+      nativeEvent: new Event('change'),
+      bubbles: true,
+      cancelable: true,
+      defaultPrevented: false,
+      isDefaultPrevented: function() { return false; },
+      isPropagationStopped: function() { return false; },
+      isTrusted: false,
+      persist: function() {},
+      preventDefault: function() {},
+      stopPropagation: function() {},
+      timeStamp: Date.now(),
+      type: 'change'
+    };
+    
+    // 派发事件到编辑器
+    const evt = new Event('change', { bubbles: true, cancelable: true });
+    editor.dispatchEvent(evt);
+    
+    // 模拟 React 的 onChange
+    const fiber = getReactFiber(editor);
+    if (fiber) {
+      console.log('[DM] 找到 React fiber，尝试触发');
+      try {
+        // React 17+ 事件委托
+        const key = Object.keys(editor).find(k => k.startsWith('__reactFiber'));
+        if (key) {
+          const f = editor[key];
+          // 尝试调用 onChange
+          if (f && f.memoizedProps && f.memoizedProps.onChange) {
+            f.memoizedProps.onChange(reactEvent);
+            console.log('[DM] 调用 fiber.memoizedProps.onChange 成功');
+          }
+        }
+      } catch (e) {
+        console.log('[DM] React fiber 调用失败:', e.message);
+      }
+    }
+    
+    // 直接设置文本
+    editor.textContent = text;
+    
+    // 派发 input 事件
+    editor.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: text
+    }));
+    
+    await delay(0.3);
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 策略C 结果:', result.substring(0, 50));
+    
+    if (result.trim().length >= text.length * 0.8) {
+      console.log('[DM] 策略C 成功!');
+      return true;
+    }
+    
+    // ========== 策略D: clipboard paste ==========
+    console.log('[DM] 策略D: clipboard paste');
     editor.innerHTML = '';
     editor.focus();
     await delay(0.3);
     
     try {
-      // 使用 execCommand 粘贴
-      const pasted = document.execCommand('paste', false, null);
-      console.log('[DM] execCommand paste:', pasted);
+      // 写入剪贴板
+      await navigator.clipboard.writeText(text);
+      console.log('[DM] 剪贴板已写入');
     } catch (e) {
-      console.log('[DM] execCommand paste 失败');
+      console.log('[DM] 剪贴板写入失败:', e.message);
     }
     
-    // 尝试 navigator.clipboard
-    const clipboardWorked = await pasteText(text);
-    if (clipboardWorked) {
-      try {
-        document.execCommand('paste', false, null);
-      } catch (e) {}
+    // 尝试粘贴
+    try {
+      document.execCommand('paste', false, null);
+    } catch (e) {
+      console.log('[DM] execCommand paste 失败');
     }
     
     // 手动派发 paste 事件
@@ -549,156 +287,118 @@
     
     await delay(0.3);
     result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 策略2 结果:', result.substring(0, 50));
+    console.log('[DM] 策略D 结果:', result.substring(0, 50));
     
-    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略2 成功!');
+    if (result.trim().length >= text.length * 0.8) {
+      console.log('[DM] 策略D 成功!');
       return true;
     }
     
-    // ========== 策略3: 手动 DOM 操作 + React 事件 ==========
-    console.log('[DM] 策略3: 手动 DOM + React 事件');
+    // ========== 策略E: 最后备选 - 直接操作 ==========
+    console.log('[DM] 策略E: 最后备选');
     editor.innerHTML = '';
-    await delay(0.3);
-    
-    // 创建文本节点
-    const textNode = document.createTextNode(text);
-    editor.appendChild(textNode);
     await delay(0.2);
+    editor.textContent = text;
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }));
     
-    // 设置 Selection
-    const newSel = window.getSelection();
-    const newRange = document.createRange();
-    newRange.selectNodeContents(editor);
-    newRange.collapse(false);
-    newSel.removeAllRanges();
-    newSel.addRange(newRange);
-    
-    // 派发多个事件确保 React 捕获
-    const events = [
-      new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }),
-      new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }),
-      new Event('change', { bubbles: true }),
-    ];
-    
-    for (const evt of events) {
-      editor.dispatchEvent(evt);
-    }
-    
-    // 尝试 React 方法
-    dispatchReactChange(editor, text);
-    
-    await delay(0.3);
+    await delay(0.2);
     result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 策略3 结果:', result.substring(0, 50));
+    console.log('[DM] 策略E 结果:', result);
     
-    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略3 成功!');
-      return true;
-    }
-    
-    // ========== 策略4: 尝试 Draft.js 的 br[data-text] 结构 ==========
-    console.log('[DM] 策略4: Draft.js br[data-text] 结构');
-    editor.innerHTML = '';
-    await delay(0.3);
-    
-    // 创建类似 Draft.js 的结构
-    const span = document.createElement('span');
-    span.setAttribute('data-text', 'true');
-    span.textContent = text;
-    editor.appendChild(span);
-    
-    // 派发事件
-    editor.dispatchEvent(new InputEvent('input', {
-      bubbles: true, cancelable: true, inputType: 'insertText', data: text
-    }));
-    
-    await delay(0.3);
-    result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 策略4 结果:', result.substring(0, 50));
-    
-    if (result.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略4 成功!');
-      return true;
-    }
-    
-    // ========== 策略5: 最后的备选 - 直接 innerText ==========
-    console.log('[DM] 策略5: 直接 innerText (最后备选)');
-    editor.innerText = text;
-    
-    // 触发多个事件
-    editor.dispatchEvent(new InputEvent('input', {
-      bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: text
-    }));
-    editor.dispatchEvent(new InputEvent('change', { bubbles: true }));
-    
-    await delay(0.3);
-    result = editor.innerText || editor.textContent || '';
-    console.log('[DM] 策略5 结果:', result);
-    
-    return result.includes(text.substring(0, Math.min(5, text.length)));
+    console.log('[DM] ===== contenteditable 输入结束 =====');
+    return result.trim().length > 0;
   }
 
-  // input/textarea 输入策略 - 修复 React 兼容性
+  // textarea/input 输入
   async function typeInInput(input, text) {
-    console.log('[DM] 使用 input/textarea 策略 (React优化版)...');
+    console.log('[DM] ===== input/textarea 输入开始 =====');
+    console.log('[DM] 输入框信息:', {
+      tagName: input.tagName,
+      type: input.type,
+      className: input.className.substring(0, 80),
+      placeholder: input.placeholder
+    });
     
-    // 聚焦
     input.focus();
     await delay(0.3);
     
-    // ========== 策略1: 直接设置 value + 手动事件 ==========
-    console.log('[DM] 策略1: 直接设置 value');
+    // ========== 策略A: 原生 setter ==========
+    console.log('[DM] 策略A: 原生 setter');
+    try {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        'value'
+      ).set;
+      nativeSetter.call(input, text);
+    } catch (e) {
+      input.value = text;
+    }
+    
+    // 派发事件
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    await delay(0.3);
+    console.log('[DM] 策略A 结果:', input.value);
+    
+    if (input.value.includes(text.substring(0, 10))) {
+      console.log('[DM] 策略A 成功!');
+      return true;
+    }
+    
+    // ========== 策略B: 逐字符输入 ==========
+    console.log('[DM] 策略B: 逐字符输入');
     input.value = '';
+    input.focus();
     await delay(0.2);
     
-    // 模拟每个字符输入
     for (let i = 0; i < text.length; i++) {
-      // React 需要 keyPress 后再改 value
-      input.dispatchEvent(new KeyboardEvent('keyPress', {
-        bubbles: true,
-        cancelable: true,
-        key: text[i],
-        charCode: text.charCodeAt(i)
+      // 触发 keydown
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true, cancelable: true,
+        key: text[i], charCode: text.charCodeAt(i), keyCode: text.charCodeAt(i)
       }));
       
+      // 设置值
       input.value = text.substring(0, i + 1);
       
+      // 触发 input
       input.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text[i]
+        bubbles: true, cancelable: true, inputType: 'insertText', data: text[i]
       }));
       
       await delay(0.02);
     }
     
-    // 触发 change
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    
     await delay(0.3);
-    console.log('[DM] 策略1 结果:', input.value);
+    console.log('[DM] 策略B 结果:', input.value);
     
-    if (input.value.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略1 成功!');
+    if (input.value.includes(text.substring(0, 10))) {
+      console.log('[DM] 策略B 成功!');
       return true;
     }
     
-    // ========== 策略2: 尝试 React fiber ==========
-    console.log('[DM] 策略2: React fiber');
+    // ========== 策略C: React fiber ==========
+    console.log('[DM] 策略C: React fiber');
     const fiber = getReactFiber(input);
     if (fiber) {
-      console.log('[DM] 找到 input React fiber');
+      console.log('[DM] 找到 React fiber');
       try {
-        // 尝试调用 internal props 的 setter
-        if (fiber.memoizedProps) {
-          // React 16
-          const originalValue = input.value;
-          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
-            .set.call(input, text);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
+        // React 16/17 内部机制
+        const keys = Object.keys(input).filter(k => k.startsWith('__reactFiber'));
+        if (keys.length > 0) {
+          const f = input[keys[0]];
+          // 尝试触发内部 setter
+          if (f && f.memoizedProps) {
+            const originalValueSetter = Object.getOwnPropertyDescriptor(
+              input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+              'value'
+            ).set;
+            originalValueSetter.call(input, text);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          }
         }
       } catch (e) {
         console.log('[DM] React fiber 策略失败:', e.message);
@@ -706,182 +406,250 @@
     }
     
     await delay(0.3);
-    console.log('[DM] 策略2 结果:', input.value);
+    console.log('[DM] 策略C 结果:', input.value);
     
-    if (input.value.includes(text.substring(0, Math.min(10, text.length)))) {
-      console.log('[DM] 策略2 成功!');
-      return true;
+    console.log('[DM] ===== input/textarea 输入结束 =====');
+    return input.value.includes(text.substring(0, 10));
+  }
+
+  // 统一输入入口
+  async function typeMessage(text) {
+    console.log('[DM] ===== typeMessage 开始 =====');
+    console.log('[DM] 目标文本:', text);
+    
+    // 等待输入框出现
+    console.log('[DM] 等待输入框...');
+    await delay(2);
+    
+    let input = null;
+    
+    // 多种可能的选择器
+    const selectors = [
+      // contenteditable
+      'div[contenteditable="true"][aria-label*="message" i]',
+      'div[contenteditable="true"][aria-label*="消息" i]',
+      'div[contenteditable="true"][aria-label*="send" i]',
+      'div[contenteditable="true"][aria-label*="发送" i]',
+      'div[contenteditable="true"][aria-label*="Type a message" i]',
+      'div[contenteditable="true"][role="textbox"]',
+      // textarea
+      'textarea[placeholder*="message" i]',
+      'textarea[placeholder*="消息" i]',
+      'textarea[placeholder*="send" i]',
+      // input
+      'input[placeholder*="message" i]',
+      'input[placeholder*="消息" i]',
+      // data-e2e
+      '[data-e2e="message-input-area"]',
+      '[data-e2e="dm-editor"]',
+      '[data-e2e="dm-new-input-editor"]',
+      '[data-e2e="message-textarea"]',
+      '[data-e2e*="input"][contenteditable="true"]',
+    ];
+    
+    for (const sel of selectors) {
+      const el = $(sel);
+      if (el && el.offsetParent !== null) {
+        input = el;
+        console.log('[DM] 找到输入框:', sel);
+        console.log('[DM] 元素详情:', {
+          tagName: el.tagName,
+          className: el.className.substring(0, 80),
+          ariaLabel: el.getAttribute('aria-label'),
+          role: el.getAttribute('role'),
+          dataE2e: el.getAttribute('data-e2e')
+        });
+        break;
+      }
     }
     
-    // ========== 策略3: setTimeout 绕过 React 批处理 ==========
-    console.log('[DM] 策略3: setTimeout 绕过批处理');
-    return new Promise(resolve => {
-      let result = '';
-      
-      // 聚焦
-      input.focus();
-      
-      // 使用 setTimeout 确保每个输入都被 React 处理
-      let i = 0;
-      function typeNext() {
-        if (i < text.length) {
-          const char = text[i++];
-          
-          // 触发 keydown
-          const keydownEvent = new KeyboardEvent('keydown', {
-            bubbles: true, cancelable: true, key: char, charCode: char.charCodeAt(0)
-          });
-          input.dispatchEvent(keydownEvent);
-          
-          // 同步设置 value
-          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            input.tagName.toLowerCase() === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-            'value'
-          ).set;
-          nativeInputValueSetter.call(input, text.substring(0, i));
-          
-          // 触发 input
-          const inputEvent = new InputEvent('input', {
-            bubbles: true, cancelable: true, inputType: 'insertText', data: char
-          });
-          input.dispatchEvent(inputEvent);
-          
-          setTimeout(typeNext, 30);
-        } else {
-          // 完成
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          resolve(input.value.includes(text.substring(0, Math.min(10, text.length))));
-        }
-      }
-      
-      typeNext();
-    });
+    if (!input) {
+      console.log('[DM] 未找到输入框');
+      return false;
+    }
+    
+    await delay(0.5);
+    
+    // 根据类型选择策略
+    if (input.isContentEditable) {
+      return await typeInContentEditable(input, text);
+    } else {
+      return await typeInInput(input, text);
+    }
   }
 
   // ========================================
-  // 发送按钮定位 - 核心修复
+  // 关注功能
   // ========================================
   
-  // 深度查找发送按钮
-  function deepFindSendButton() {
-    // 方法1: 查找包含 "send" 相关文本的按钮
-    const allButtons = $$('button');
-    for (const btn of allButtons) {
-      if (btn.offsetParent === null) continue;
-      
-      const text = btn.innerText?.trim().toLowerCase() || '';
-      const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
-      
-      // 匹配关键词
-      if (text === 'send' || text === '发送' || text === 'send message' ||
-          ariaLabel.includes('send') || ariaLabel.includes('发送')) {
-        console.log('[DM] 找到发送按钮 (文字匹配):', text || ariaLabel);
-        return btn;
+  async function checkFollowing() {
+    await delay();
+    
+    const followingBtn = $('[data-e2e="following-button"]');
+    if (followingBtn && followingBtn.offsetParent !== null) {
+      console.log('[DM] 已关注');
+      return true;
+    }
+    
+    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
+    if (followBtn && followBtn.offsetParent !== null) {
+      console.log('[DM] 未关注');
+      return false;
+    }
+    
+    const buttons = $$('button');
+    for (const btn of buttons) {
+      const text = btn.innerText?.trim().toLowerCase();
+      if (text === 'following') return true;
+      if (text === 'follow') return false;
+    }
+    
+    return false;
+  }
+
+  async function doFollow() {
+    console.log('[DM] 执行关注...');
+    await delay();
+    
+    const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
+    if (followBtn && click(followBtn)) {
+      console.log('[DM] 点击关注按钮成功');
+      await delay();
+      return true;
+    }
+    
+    const buttons = $$('button');
+    for (const btn of buttons) {
+      if (btn.innerText?.trim().toLowerCase() === 'follow' && btn.offsetParent !== null) {
+        if (click(btn)) {
+          console.log('[DM] 按文字点击关注成功');
+          await delay();
+          return true;
+        }
       }
     }
     
-    // 方法2: 查找 DM 相关的 data-e2e
-    const dmSelectors = [
+    console.log('[DM] 未找到关注按钮');
+    return false;
+  }
+
+  // ========================================
+  // 消息按钮
+  // ========================================
+  
+  async function clickMessage() {
+    console.log('[DM] 查找消息按钮...');
+    await delay();
+    
+    const selectors = [
+      '[data-e2e="contact-msg-btn"]',
+      '[data-e2e="message-button"]',
+      '[aria-label*="message" i]',
+      '[aria-label*="消息" i]',
+      'a[href*="/message/"]',
+    ];
+    
+    for (const sel of selectors) {
+      const el = $(sel);
+      if (el && click(el)) {
+        console.log('[DM] 点击消息按钮:', sel);
+        await delay();
+        return true;
+      }
+    }
+    
+    const links = $$('a');
+    for (const a of links) {
+      const text = a.innerText?.trim().toLowerCase();
+      if (text === 'message' || text === '发消息') {
+        if (click(a)) {
+          console.log('[DM] 按文字点击消息按钮');
+          await delay();
+          return true;
+        }
+      }
+    }
+    
+    console.log('[DM] 未找到消息按钮');
+    return false;
+  }
+
+  async function waitForMessageDialog() {
+    console.log('[DM] 等待私信对话框...');
+    
+    for (let i = 0; i < 20; i++) {
+      await delay(0.5);
+      
+      const indicators = [
+        '[data-e2e="message-input-area"]',
+        '[data-e2e="dm-editor"]',
+        '[data-e2e*="input-editor"]',
+        'div[contenteditable="true"][role="textbox"]',
+        'textarea[placeholder*="message" i]',
+        '[class*="message-editor"]',
+        '[class*="dm-editor"]',
+      ];
+      
+      for (const sel of indicators) {
+        const el = $(sel);
+        if (el && el.offsetParent !== null) {
+          console.log('[DM] 私信对话框已出现:', sel);
+          return true;
+        }
+      }
+    }
+    
+    console.log('[DM] 私信对话框未出现');
+    return false;
+  }
+
+  // ========================================
+  // 发送按钮
+  // ========================================
+  
+  async function findSendButton() {
+    console.log('[DM] 查找发送按钮...');
+    
+    // 先等一下
+    await delay(1);
+    
+    const selectors = [
+      // data-e2e
       '[data-e2e="dm-new-send-btn"]',
       '[data-e2e="send-message-button"]',
       '[data-e2e="dm-send-btn"]',
       '[data-e2e="message-send-btn"]',
-      '[data-e2e="new-dm-send"]',
-      '[data-e2e="chat-send-btn"]',
+      // 文字
+      'button',
+      'div[role="button"]',
     ];
     
-    for (const sel of dmSelectors) {
-      const btn = $(sel);
-      if (btn && btn.offsetParent !== null) {
-        console.log('[DM] 找到发送按钮 (data-e2e):', sel);
-        return btn;
-      }
-    }
-    
-    // 方法3: 查找粉色/红色图标按钮（TikTok 品牌色 #FE2C55）
-    for (const btn of allButtons) {
-      if (btn.offsetParent === null) continue;
+    for (const sel of selectors) {
+      const els = sel === 'button' || sel === 'div[role="button"]' ? $$(sel) : [$(sel)];
       
-      const svg = btn.querySelector('svg');
-      if (svg) {
-        const fill = svg.getAttribute('fill') || '';
-        const color = svg.getAttribute('color') || '';
+      for (const el of els) {
+        if (!el || el.offsetParent === null) continue;
         
-        // TikTok 粉色
-        if (fill.includes('FE2C55') || fill.includes('fe2c55') ||
-            color.includes('FE2C55') || color.includes('fe2c55')) {
-          console.log('[DM] 找到发送按钮 (粉色图标)');
-          return btn;
-        }
-      }
-    }
-    
-    // 方法4: 查找 icon 类型的按钮（通常是发送图标）
-    for (const btn of allButtons) {
-      if (btn.offsetParent === null) continue;
-      if (btn.className && btn.className.includes && 
-          (btn.className.includes('send') || btn.className.includes('submit'))) {
-        console.log('[DM] 找到发送按钮 (class)');
-        return btn;
-      }
-    }
-    
-    // 方法5: 查找 DM 编辑器区域的按钮
-    const editorArea = $('[data-e2e*="input-editor"], [data-e2e*="dm-editor"], [class*="dm-editor"]');
-    if (editorArea) {
-      const buttons = editorArea.querySelectorAll('button');
-      for (const btn of buttons) {
-        if (btn.offsetParent !== null && btn.innerText?.trim()) {
-          // 有文字的按钮
-          const text = btn.innerText.trim().toLowerCase();
-          if (text === 'send' || text === '发送') {
-            console.log('[DM] 找到发送按钮 (编辑器内)');
-            return btn;
-          }
-        }
-      }
-    }
-    
-    // 方法6: 查找 div[role="button"] 类型的发送按钮
-    const roleButtons = $$('div[role="button"]');
-    for (const btn of roleButtons) {
-      if (btn.offsetParent === null) continue;
-      const text = btn.innerText?.trim().toLowerCase() || '';
-      if (text === 'send' || text === '发送') {
-        console.log('[DM] 找到发送按钮 (role=button)');
-        return btn;
-      }
-    }
-    
-    return null;
-  }
-
-  // 找到发送按钮
-  async function findSendButton() {
-    console.log('[DM] 查找发送按钮...');
-    
-    // 先等一下让按钮出现
-    await waitFor(() => !!deepFindSendButton(), 3000, 300);
-    
-    const btn = deepFindSendButton();
-    if (btn) return btn;
-    
-    // 备选：在整个页面范围搜索
-    console.log('[DM] 尝试全页面搜索...');
-    await delay(1);
-    
-    // 搜索所有可能包含 Send 文字的元素
-    const sendElements = $$('*');
-    for (const el of sendElements) {
-      if (el.offsetParent === null) continue;
-      
-      const text = el.innerText?.trim().toLowerCase() || '';
-      if (text === 'send' || text === '发送') {
-        // 检查是否是可点击的
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'button' || tag === 'div' || tag === 'span') {
-          console.log('[DM] 全页面搜索找到发送元素:', tag, text);
+        const text = el.innerText?.trim().toLowerCase() || '';
+        const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+        const dataE2e = el.getAttribute('data-e2e') || '';
+        
+        // 匹配发送按钮
+        if (text === 'send' || text === '发送' || text === 'send message' ||
+            ariaLabel.includes('send') || ariaLabel.includes('发送') ||
+            dataE2e.includes('send')) {
+          console.log('[DM] 找到发送按钮:', { text, ariaLabel, dataE2e });
           return el;
+        }
+        
+        // 粉色图标（Tiktok 品牌色）
+        const svg = el.querySelector?.('svg');
+        if (svg) {
+          const fill = svg.getAttribute('fill') || '';
+          if (fill.includes('FE2C55') || fill.includes('fe2c55')) {
+            console.log('[DM] 找到粉色发送按钮');
+            return el;
+          }
         }
       }
     }
@@ -890,7 +658,6 @@
     return null;
   }
 
-  // 点击发送按钮
   async function clickSend() {
     console.log('[DM] 点击发送按钮...');
     
@@ -900,24 +667,17 @@
       return false;
     }
     
-    // 聚焦并点击
     sendBtn.focus();
     await delay(0.2);
     
-    // 方法1: 直接 click
     if (click(sendBtn)) {
-      console.log('[DM] click() 点击成功');
+      console.log('[DM] 点击发送成功');
       await delay(1);
       return true;
     }
     
-    // 方法2: dispatchEvent
-    sendBtn.dispatchEvent(new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window
-    }));
-    console.log('[DM] dispatchEvent 点击成功');
+    sendBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    console.log('[DM] dispatchEvent 点击发送');
     await delay(1);
     return true;
   }
@@ -937,47 +697,41 @@
     }
 
     try {
-      // 步骤1: 检查并关注
+      // 检查并关注
       console.log('[DM] 步骤1: 检查关注状态');
       const isFollowing = await checkFollowing();
       
       if (!isFollowing) {
         console.log('[DM] 步骤2: 执行关注');
-        const followed = await doFollow();
-        if (!followed) {
-          console.log('[DM] 关注失败，但继续尝试发送私信');
-        }
+        await doFollow();
       } else {
         console.log('[DM] 步骤2: 已关注，跳过');
       }
 
-      // 步骤3: 点击消息按钮
+      // 点击消息按钮
       console.log('[DM] 步骤3: 点击消息按钮');
       const msgClicked = await clickMessage();
       if (!msgClicked) {
-        return { success: false, error: '未找到消息按钮', step: '消息按钮' };
+        return { success: false, error: '消息按钮未找到', step: '消息按钮' };
       }
 
-      // 步骤4: 等待对话框
+      // 等待对话框
       console.log('[DM] 步骤4: 等待私信对话框');
       const dialogAppeared = await waitForMessageDialog();
       if (!dialogAppeared) {
         return { success: false, error: '私信对话框未出现', step: '等待对话框' };
       }
 
-      // 步骤5: 输入文字
+      // 输入消息
       console.log('[DM] 步骤5: 输入私信内容');
       const typed = await typeMessage(message);
       if (!typed) {
         return { success: false, error: '输入框输入失败', step: '输入框' };
       }
 
-      // 步骤6: 点击发送
+      // 发送
       console.log('[DM] 步骤6: 点击发送');
-      const sent = await clickSend();
-      if (!sent) {
-        return { success: false, error: '发送按钮未找到', step: '发送按钮' };
-      }
+      await clickSend();
 
       console.log('[DM] ===== 私信流程完成 =====');
       return { success: true, username };
@@ -1000,35 +754,39 @@
     } 
     else if (req.action === 'sendDM') {
       sendDM(req.message).then(result => res(result));
-      return true; // 异步响应
+      return true;
     }
     else if (req.action === 'debug') {
-      // 调试信息
-      const debugInfo = {
+      // 调试：收集页面信息
+      const info = {
         username: getUsername(),
         url: window.location.href,
         path: window.location.pathname,
-        // 输入框状态
-        inputCandidates: [],
-        // 按钮状态
-        buttonCandidates: [],
+        inputs: [],
+        buttons: [],
       };
       
-      // 收集可能的输入框
-      const inputs = $$('div[contenteditable="true"]');
-      inputs.forEach(el => {
-        debugInfo.inputCandidates.push({
+      // 收集输入框
+      $$('div[contenteditable="true"]').forEach(el => {
+        info.inputs.push({
+          class: el.className.substring(0, 80),
           ariaLabel: el.getAttribute('aria-label'),
-          className: el.className,
-          hasContent: !!el.innerText
+          dataE2e: el.getAttribute('data-e2e')
         });
       });
       
-      // 收集可能的按钮
-      const btns = $$('button');
-      btns.forEach(el => {
+      $$('textarea, input').forEach(el => {
+        info.inputs.push({
+          tagName: el.tagName,
+          placeholder: el.placeholder,
+          dataE2e: el.getAttribute('data-e2e')
+        });
+      });
+      
+      // 收集按钮
+      $$('button').forEach(el => {
         if (el.offsetParent !== null) {
-          debugInfo.buttonCandidates.push({
+          info.buttons.push({
             text: el.innerText?.trim().substring(0, 30),
             ariaLabel: el.getAttribute('aria-label'),
             dataE2e: el.getAttribute('data-e2e')
@@ -1036,9 +794,9 @@
         }
       });
       
-      res(debugInfo);
+      res(info);
     }
   });
 
-  console.log('[DM] TikTok DM 插件已加载 (Codex 优化版), 用户:', getUsername());
+  console.log('[DM] TikTok DM 插件已加载 (Codex 完整修复版), 用户:', getUsername());
 })();
