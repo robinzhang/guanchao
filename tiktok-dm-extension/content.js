@@ -71,7 +71,6 @@
     
     // 查找"已关注"按钮
     const followingSelectors = [
-      'button:has-text("Following")',
       '[data-e2e="following-button"]',
       'button[class*="following"]',
       '//button[contains(text(), "Following")]',
@@ -80,7 +79,6 @@
     
     // 查找"关注"按钮
     const followSelectors = [
-      'button:has-text("Follow")',
       '[data-e2e="follow-button"]',
       '[data-e2e="follow-user-button"]',
       'button[class*="follow"]',
@@ -110,7 +108,6 @@
     console.log('[TikTok DM] 执行关注操作...');
     
     const followSelectors = [
-      'button:has-text("Follow")',
       '[data-e2e="follow-button"]',
       '[data-e2e="follow-user-button"]',
       'button[class*="follow"]',
@@ -138,9 +135,6 @@
     const msgSelectors = [
       '[data-e2e="contact-msg-btn"]',
       '[data-e2e="message-button"]',
-      'a:has-text("Message")',
-      'a:has-text("消息")',
-      'a:has-text("发消息")',
       'a[href*="/message/"]',
       '//a[contains(text(), "Message")]',
       '//span[contains(text(), "Message")]',
