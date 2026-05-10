@@ -10,11 +10,14 @@
 
   // 随机延迟（秒）
   function delay(sec) {
-    return new Promise(resolve => setTimeout(resolve, sec * 1000));
+    const actual = sec || (5 + Math.random() * 5);
+    console.log('[DM] 等待', actual.toFixed(1), '秒...');
+    return new Promise(resolve => setTimeout(resolve, actual * 1000));
   }
 
   // 查找单个元素
   function $(selector) {
+    if (!selector) return null;
     if (selector.startsWith('//')) {
       const result = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
       return result.singleNodeValue;
@@ -50,7 +53,7 @@
   
   // 检查是否已关注
   async function checkFollowing() {
-    await delay(0.5);
+    await delay(6);
     
     // 方法1: 检查已关注按钮
     const followingBtn = $('[data-e2e="following-button"]');
@@ -80,12 +83,13 @@
   // 点击关注
   async function doFollow() {
     console.log('[DM] 执行关注...');
+    await delay(6);
     
     // 方法1: data-e2e 选择器
     const followBtn = $('[data-e2e="follow-button"], [data-e2e="follow-user-button"]');
     if (followBtn && click(followBtn)) {
       console.log('[DM] 点击关注按钮成功');
-      await delay(2);
+      await delay(6);
       return true;
     }
     
@@ -95,7 +99,7 @@
       if (btn.innerText?.trim().toLowerCase() === 'follow' && btn.offsetParent !== null) {
         if (click(btn)) {
           console.log('[DM] 按文字点击关注成功');
-          await delay(2);
+          await delay(6);
           return true;
         }
       }
@@ -112,13 +116,13 @@
   // 点击消息按钮
   async function clickMessage() {
     console.log('[DM] 查找消息按钮...');
-    await delay(1);
+    await delay(6);
     
     // 方法1: data-e2e 选择器
     const msgBtn = $('[data-e2e="contact-msg-btn"], [data-e2e="message-button"]');
     if (msgBtn && click(msgBtn)) {
       console.log('[DM] 点击消息按钮成功');
-      await delay(2);
+      await delay(6);
       return true;
     }
     
@@ -129,7 +133,7 @@
       if (text === 'message' || text === '发消息') {
         if (click(a)) {
           console.log('[DM] 按文字点击消息按钮成功');
-          await delay(2);
+          await delay(6);
           return true;
         }
       }
@@ -139,7 +143,7 @@
     const msgLinks = $$('a[href*="/message/"]');
     if (msgLinks.length > 0 && click(msgLinks[0])) {
       console.log('[DM] 点击 message 链接成功');
-      await delay(2);
+      await delay(6);
       return true;
     }
     
@@ -150,9 +154,10 @@
   // 等待私信对话框出现
   async function waitForMessageDialog() {
     console.log('[DM] 等待私信对话框...');
+    await delay(6);
     
     for (let i = 0; i < 10; i++) {
-      await delay(0.5);
+      await delay(1);
       
       // 检查是否有输入框出现
       const inputArea = $('[data-e2e="message-input-area"]');
@@ -176,6 +181,7 @@
   // 找到私信输入框
   async function findInput() {
     console.log('[DM] 查找输入框...');
+    await delay(6);
     
     // 方法1: message-input-area
     const inputArea = $('[data-e2e="message-input-area"]');
@@ -209,74 +215,89 @@
     return null;
   }
 
-  // 输入文字到私信框（Draft.js 兼容方式）
+  // 输入文字到私信框 - 直接 DOM 操作
   async function typeMessage(text) {
     console.log('[DM] 输入私信:', text);
-    await delay(0.5);
+    await delay(6); // 5-10秒等待
     
-    // 找到 contenteditable 元素
-    const editor = $('div[contenteditable="true"][aria-label="发送消息..."]');
-    if (!editor) {
-      console.log('[DM] 未找到 contenteditable 编辑器');
+    // 找到整个输入区域
+    const inputArea = $('div[data-e2e="message-input-area"]');
+    if (!inputArea) {
+      console.log('[DM] 未找到 message-input-area');
       return false;
     }
     
-    // 聚焦
-    editor.focus();
-    await delay(0.2);
+    // 聚焦到输入区域
+    const contenteditable = $('div[contenteditable="true"][aria-label="发送消息..."]', inputArea);
+    if (contenteditable) {
+      contenteditable.focus();
+      console.log('[DM] 已聚焦到 contenteditable');
+    }
     
-    // 选中文本并删除（清空现有内容）
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    await delay(1);
     
-    // 使用 execCommand 删除
-    document.execCommand('delete', false, null);
-    await delay(0.1);
-    
-    // 使用 execCommand insertText（Draft.js 监听这个命令）
-    document.execCommand('insertText', false, text);
-    await delay(0.3);
-    
-    // 检查输入结果
-    const entered = editor.innerText || editor.textContent || '';
-    console.log('[DM] 输入框内容:', entered.substring(0, 30) || '(空)');
-    
-    if (!entered.trim()) {
-      // execCommand 失败，尝试直接设置
-      console.log('[DM] execCommand 失败，尝试直接设置...');
+    // 找到 br[data-text="true"] 并替换为 span
+    const br = $('br[data-text="true"]', inputArea);
+    if (br) {
+      console.log('[DM] 找到 br[data-text], 准备替换');
       
-      // 找到内部的 span[data-text="true"]
-      const span = $('span[data-text="true"]');
-      if (span) {
-        span.textContent = text;
-        // 触发 input 事件
-        span.dispatchEvent(new InputEvent('input', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: text
-        }));
-        console.log('[DM] 直接设置 span[data-text] 成功');
-        return true;
-      }
+      // 创建 span 元素
+      const span = document.createElement('span');
+      span.setAttribute('data-text', 'true');
+      span.textContent = text;
       
-      // 备选：操作 innerHTML
-      const contents = editor.querySelector('[data-contents="true"]');
+      // 替换 br
+      br.parentNode.replaceChild(span, br);
+      console.log('[DM] 已替换 br 为 span');
+      
+      // 触发必要的事件
+      span.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      // 触发 compositionend
+      span.dispatchEvent(new CompositionEvent('compositionend', {
+        bubbles: true,
+        cancelable: true,
+        data: text
+      }));
+      
+      // 触发 keydown/keyup Enter
+      span.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Enter',
+        keyCode: 13
+      }));
+      
+      await delay(1);
+      
+      console.log('[DM] 输入完成，当前内容:', span.textContent);
+      return true;
+    } else {
+      console.log('[DM] 未找到 br[data-text], 尝试其他方式');
+      
+      // 尝试直接在 innerHTML 里操作
+      const contents = $('[data-contents="true"]', inputArea);
       if (contents) {
+        console.log('[DM] 找到 data-contents, 替换内容');
         contents.innerHTML = `<div data-block="true" data-editor="xxx"><div class="public-DraftStyleDefault-block"><span data-text="true">${text}</span></div></div>`;
-        editor.dispatchEvent(new InputEvent('input', {
-          bubbles: true,
-          cancelable: true
-        }));
-        console.log('[DM] 通过 innerHTML 设置成功');
+        
+        const newSpan = $('span[data-text="true"]', inputArea);
+        if (newSpan) {
+          newSpan.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            cancelable: true
+          }));
+        }
         return true;
       }
     }
     
-    return true;
+    return false;
   }
 
   // 找到发送按钮
@@ -348,7 +369,7 @@
   // 点击发送按钮
   async function clickSend() {
     console.log('[DM] 点击发送按钮...');
-    await delay(0.5);
+    await delay(6);
     
     const sendBtn = await findSendButton();
     if (!sendBtn) {
