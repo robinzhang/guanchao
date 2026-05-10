@@ -213,18 +213,16 @@
     
     // 注意：不能使用 :has-text() 这种 Playwright 语法，只能用 CSS 选择器或 XPath
     const sendSelectors = [
-      // 主要选择器
-      'button[type="submit"]',
+      // TikTok 当前的发送按钮
+      '[data-e2e="dm-new-send-btn"]',
+      // 备选
       '[data-e2e="send-message-button"]',
-      // TikTok 可能的选择器
+      'button[type="submit"]',
       'button[class*="send"]',
       'button[class*="Send"]',
       // XPath 方式
       '//button[contains(text(), "Send")]',
-      '//button[contains(text(), "发送")]',
-      '//button[contains(text(), "Send")]/..',
-      // 备选：图标按钮
-      'button[class*="Icon"]'
+      '//button[contains(text(), "发送")]'
     ];
     
     const sendBtn = findElement(sendSelectors);
