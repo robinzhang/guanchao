@@ -217,19 +217,20 @@
   async function findSendButton() {
     console.log('[TikTok DM] 查找发送按钮...');
     
+    // 注意：不能使用 :has-text() 这种 Playwright 语法，只能用 CSS 选择器或 XPath
     const sendSelectors = [
       // 主要选择器
       'button[type="submit"]',
-      'button:has-text("Send")',
-      'button:has-text("发送")',
-      // TikTok 可能的选择器
       '[data-e2e="send-message-button"]',
+      // TikTok 可能的选择器
       'button[class*="send"]',
       'button[class*="Send"]',
+      // XPath 方式
       '//button[contains(text(), "Send")]',
       '//button[contains(text(), "发送")]',
-      '//div[contains(@class, "send")]/button',
-      '//div[contains(@class, "Send")]/button'
+      '//button[contains(text(), "Send")]/..',
+      // 备选：图标按钮
+      'button[class*="Icon"]'
     ];
     
     const sendBtn = findElement(sendSelectors);
