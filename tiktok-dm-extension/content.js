@@ -215,88 +215,81 @@
     return null;
   }
 
-  // 输入文字到私信框 - 直接 DOM 操作
+  // 输入文字到私信框 - 使用剪贴板粘贴（Draft.js 最兼容的方式）
   async function typeMessage(text) {
     console.log('[DM] 输入私信:', text);
-    await delay(6); // 5-10秒等待
+    await delay(6);
     
-    // 找到整个输入区域
-    const inputArea = $('div[data-e2e="message-input-area"]');
-    if (!inputArea) {
-      console.log('[DM] 未找到 message-input-area');
+    // 找到 contenteditable 编辑器
+    const editor = $('div[contenteditable="true"][aria-label="发送消息..."]');
+    if (!editor) {
+      console.log('[DM] 未找到 contenteditable 编辑器');
       return false;
     }
     
-    // 聚焦到输入区域
-    const contenteditable = $('div[contenteditable="true"][aria-label="发送消息..."]', inputArea);
-    if (contenteditable) {
-      contenteditable.focus();
-      console.log('[DM] 已聚焦到 contenteditable');
+    // 聚焦
+    editor.focus();
+    console.log('[DM] 已聚焦到编辑器');
+    await delay(2);
+    
+    // 方法1: 使用剪贴板 API（最兼容 Draft.js）
+    try {
+      // 复制文本到剪贴板
+      await navigator.clipboard.writeText(text);
+      console.log('[DM] 已复制到剪贴板');
+      
+      // 执行粘贴
+      document.execCommand('paste', false, null);
+      console.log('[DM] 已执行粘贴');
+      await delay(2);
+      
+      // 检查结果
+      const content = editor.innerText || editor.textContent || '';
+      console.log('[DM] 粘贴后内容:', content.substring(0, 30) || '(空)');
+      
+      if (content.trim()) {
+        console.log('[DM] 剪贴板粘贴成功');
+        return true;
+      }
+    } catch (e) {
+      console.log('[DM] 剪贴板方式失败:', e.message);
     }
     
+    // 方法2: execCommand insertText
+    console.log('[DM] 尝试 execCommand insertText...');
+    editor.focus();
+    
+    // 全选并删除
+    document.execCommand('selectAll', false, null);
+    await delay(0.2);
+    document.execCommand('delete', false, null);
+    await delay(0.2);
+    
+    // 插入文本
+    document.execCommand('insertText', false, text);
     await delay(1);
     
-    // 找到 br[data-text="true"] 并替换为 span
-    const br = $('br[data-text="true"]', inputArea);
+    let content = editor.innerText || editor.textContent || '';
+    console.log('[DM] insertText 后内容:', content.substring(0, 30) || '(空)');
+    
+    if (content.trim()) {
+      console.log('[DM] insertText 成功');
+      return true;
+    }
+    
+    // 方法3: 直接替换 br 为 span
+    console.log('[DM] 尝试直接替换 br...');
+    const br = $('br[data-text="true"]');
     if (br) {
-      console.log('[DM] 找到 br[data-text], 准备替换');
-      
-      // 创建 span 元素
       const span = document.createElement('span');
       span.setAttribute('data-text', 'true');
       span.textContent = text;
-      
-      // 替换 br
       br.parentNode.replaceChild(span, br);
-      console.log('[DM] 已替换 br 为 span');
-      
-      // 触发必要的事件
-      span.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text
-      }));
-      
-      // 触发 compositionend
-      span.dispatchEvent(new CompositionEvent('compositionend', {
-        bubbles: true,
-        cancelable: true,
-        data: text
-      }));
-      
-      // 触发 keydown/keyup Enter
-      span.dispatchEvent(new KeyboardEvent('keydown', {
-        bubbles: true,
-        cancelable: true,
-        key: 'Enter',
-        keyCode: 13
-      }));
-      
-      await delay(1);
-      
-      console.log('[DM] 输入完成，当前内容:', span.textContent);
+      console.log('[DM] 直接替换 br 成功');
       return true;
-    } else {
-      console.log('[DM] 未找到 br[data-text], 尝试其他方式');
-      
-      // 尝试直接在 innerHTML 里操作
-      const contents = $('[data-contents="true"]', inputArea);
-      if (contents) {
-        console.log('[DM] 找到 data-contents, 替换内容');
-        contents.innerHTML = `<div data-block="true" data-editor="xxx"><div class="public-DraftStyleDefault-block"><span data-text="true">${text}</span></div></div>`;
-        
-        const newSpan = $('span[data-text="true"]', inputArea);
-        if (newSpan) {
-          newSpan.dispatchEvent(new InputEvent('input', {
-            bubbles: true,
-            cancelable: true
-          }));
-        }
-        return true;
-      }
     }
     
+    console.log('[DM] 所有输入方式都失败');
     return false;
   }
 
