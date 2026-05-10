@@ -91,46 +91,176 @@
   // 核心输入函数 - 完整重写
   // ========================================
   
-  // 安全的 contenteditable 输入
+  // 安全的 contenteditable 输入 - Draft.js 精确适配
   async function typeInContentEditable(editor, text) {
-    console.log('[DM] ===== contenteditable 输入开始 =====');
+    console.log('[DM] ===== Draft.js contenteditable 输入开始 =====');
     console.log('[DM] 编辑器信息:', {
       tagName: editor.tagName,
       className: editor.className.substring(0, 80),
       ariaLabel: editor.getAttribute('aria-label'),
-      contenteditable: editor.contentEditable,
+      dataEditor: editor.getAttribute('data-editor'),
       childCount: editor.children.length,
-      innerHTML: editor.innerHTML.substring(0, 100)
     });
     
     // 聚焦
     editor.focus();
+    await delay(0.5);
+    
+    // ========== 关键：找到 Draft.js 的内部结构 ==========
+    // Draft.js 将内容包装在 <div data-contents="true"> 内
+    // 每个文本块是 <div data-block="true"> 包含 <span data-text="true">
+    
+    // 先找到或创建 data-contents 容器
+    let contentsContainer = editor.querySelector('[data-contents="true"]');
+    if (!contentsContainer) {
+      console.log('[DM] 未找到 data-contents，创建结构');
+      editor.innerHTML = '<div data-contents="true"><div class="" data-block="true" data-editor="6cvb7" data-offset-key="a0-0-0"><div class="public-DraftStyleDefault-block public-DraftStyleDefault-ltr"><span data-offset-key="a0-0-0"><br data-text="true"></span></div></div></div>';
+      contentsContainer = editor.querySelector('[data-contents="true"]');
+    } else {
+      // 清空现有内容但保持结构
+      const block = contentsContainer.querySelector('[data-block="true"]');
+      if (block) {
+        block.innerHTML = '<span data-offset-key="a0-0-0"><br data-text="true"></span>';
+      }
+    }
+    
     await delay(0.3);
     
-    // 清空现有内容
-    editor.innerHTML = '';
-    await delay(0.2);
-    
-    // ========== 策略A: execCommand insertText（最接近真实输入）==========
+    // ========== 策略A: execCommand insertText（最接近真实用户输入）==========
     console.log('[DM] 策略A: execCommand insertText');
     
-    // 设置 Selection 到编辑器末尾
+    // 确保 selection 在正确位置
     const sel = window.getSelection();
     sel.selectAllChildren(editor);
     sel.collapseToEnd();
     
-    // 尝试插入
     const inserted = document.execCommand('insertText', false, text);
     console.log('[DM] insertText 结果:', inserted);
     
-    await delay(0.3);
+    await delay(0.5);
     let result = editor.innerText || editor.textContent || '';
     console.log('[DM] 策略A 结果:', result.substring(0, 50), '| 长度:', result.length);
     
-    if (result.trim().length >= text.length * 0.8) {
+    // 检查 placeholder 是否消失（通过检查是否有真实文本）
+    const placeholder = document.querySelector('.DraftEditor-placeholder-root');
+    const placeholderVisible = placeholder ? window.getComputedStyle(placeholder).display !== 'none' : false;
+    console.log('[DM] Placeholder 可见性:', placeholderVisible);
+    
+    if (result.trim().length >= text.length * 0.8 && !placeholderVisible) {
       console.log('[DM] 策略A 成功!');
       return true;
     }
+    
+    // 如果 insertText 没生效，手动构建 Draft.js 结构
+    console.log('[DM] insertText 未生效，手动构建 Draft.js 结构');
+    
+    // 找到 br[data-text] 并替换为 span[data-text]
+    const br = editor.querySelector('br[data-text="true"]');
+    if (br) {
+      // 创建 Draft.js 风格的 span
+      const span = document.createElement('span');
+      span.setAttribute('data-text', 'true');
+      span.textContent = text;
+      
+      // 替换
+      br.parentNode.replaceChild(span, br);
+      console.log('[DM] 已替换 br 为 span');
+      
+      await delay(0.3);
+      result = editor.innerText || editor.textContent || '';
+      console.log('[DM] 手动替换后结果:', result);
+    }
+    
+    // ========== 关键：触发 Draft.js 的 onChange ==========
+    console.log('[DM] 触发 Draft.js onChange...');
+    
+    // 方法1: 尝试通过 React fiber 触发
+    const reactFiber = getReactFiber(editor);
+    if (reactFiber) {
+      console.log('[DM] 找到 React fiber');
+      try {
+        // 尝试找到并调用 onChange
+        const keys = Object.keys(editor).filter(k => k.startsWith('__reactFiber'));
+        if (keys.length > 0) {
+          const fiber = editor[keys[0]];
+          // 向上遍历找到有 onChange 的节点
+          let current = fiber;
+          for (let i = 0; i < 10 && current; i++) {
+            if (current.memoizedProps && current.memoizedProps.onChange) {
+              console.log('[DM] 找到 onChange at level', i);
+              const event = {
+                target: editor,
+                currentTarget: editor,
+                bubbles: true,
+                cancelable: true,
+                defaultPrevented: false,
+                isDefaultPrevented: () => false,
+                isPropagationStopped: () => false,
+                isTrusted: false,
+                persist: () => {},
+                preventDefault: () => {},
+                stopPropagation: () => {},
+                timeStamp: Date.now(),
+                type: 'change'
+              };
+              current.memoizedProps.onChange(event);
+              console.log('[DM] onChange 调用成功');
+              break;
+            }
+            current = current.return;
+          }
+        }
+      } catch (e) {
+        console.log('[DM] React fiber onChange 调用失败:', e.message);
+      }
+    }
+    
+    // 方法2: 尝试 Draft.js 的内部方法
+    // Draft.js 存储在 window 上的某个地方或通过 DOM 关联
+    const draftEditor = editor.closest?.('.DraftEditor-root');
+    if (draftEditor) {
+      console.log('[DM] 找到 DraftEditor root');
+      // 尝试获取 DraftEditor 实例
+      const draftKeys = Object.keys(draftEditor).filter(k => k.startsWith('_')); 
+      console.log('[DM] DraftEditor keys:', draftKeys.slice(0, 5));
+    }
+    
+    // 方法3: 派发多个事件确保 Draft.js 捕获
+    const events = [
+      new InputEvent('beforeinput', {
+        bubbles: true, cancelable: true,
+        inputType: 'insertText', data: text
+      }),
+      new InputEvent('input', {
+        bubbles: true, cancelable: true,
+        inputType: 'insertText', data: text
+      }),
+      new Event('change', { bubbles: true }),
+      // Draft.js 可能监听 keypress
+      new KeyboardEvent('keypress', {
+        bubbles: true, cancelable: true,
+        key: 'Enter', keyCode: 13, which: 13
+      }),
+    ];
+    
+    for (const evt of events) {
+      editor.dispatchEvent(evt);
+    }
+    
+    await delay(0.5);
+    
+    // 再次检查 placeholder
+    const placeholderAfter = document.querySelector('.DraftEditor-placeholder-root');
+    const placeholderVisibleAfter = placeholderAfter ? window.getComputedStyle(placeholderAfter).display !== 'none' : false;
+    console.log('[DM] Placeholder 最终可见性:', placeholderVisibleAfter);
+    
+    result = editor.innerText || editor.textContent || '';
+    console.log('[DM] 最终结果:', result);
+    
+    console.log('[DM] ===== Draft.js contenteditable 输入结束 =====');
+    
+    return result.trim().length > 0 && !placeholderVisibleAfter;
+  }
     
     // ========== 策略B: 手动派发完整事件序列 ==========
     console.log('[DM] 策略B: 手动派发完整事件序列');
@@ -423,43 +553,54 @@
     
     let input = null;
     
-    // 多种可能的选择器
-    const selectors = [
-      // contenteditable
-      'div[contenteditable="true"][aria-label*="message" i]',
-      'div[contenteditable="true"][aria-label*="消息" i]',
-      'div[contenteditable="true"][aria-label*="send" i]',
-      'div[contenteditable="true"][aria-label*="发送" i]',
-      'div[contenteditable="true"][aria-label*="Type a message" i]',
-      'div[contenteditable="true"][role="textbox"]',
-      // textarea
-      'textarea[placeholder*="message" i]',
-      'textarea[placeholder*="消息" i]',
-      'textarea[placeholder*="send" i]',
-      // input
-      'input[placeholder*="message" i]',
-      'input[placeholder*="消息" i]',
-      // data-e2e
-      '[data-e2e="message-input-area"]',
-      '[data-e2e="dm-editor"]',
-      '[data-e2e="dm-new-input-editor"]',
-      '[data-e2e="message-textarea"]',
-      '[data-e2e*="input"][contenteditable="true"]',
-    ];
+    // ========== 精确查找 Draft.js 输入框 ==========
+    // TikTok 使用 Draft.js，输入框是 .public-DraftEditor-content
     
-    for (const sel of selectors) {
-      const el = $(sel);
-      if (el && el.offsetParent !== null) {
-        input = el;
-        console.log('[DM] 找到输入框:', sel);
-        console.log('[DM] 元素详情:', {
-          tagName: el.tagName,
-          className: el.className.substring(0, 80),
-          ariaLabel: el.getAttribute('aria-label'),
-          role: el.getAttribute('role'),
-          dataE2e: el.getAttribute('data-e2e')
-        });
-        break;
+    // 方法1: 精确选择 Draft.js 结构
+    const draftEditorContent = $('.public-DraftEditor-content');
+    if (draftEditorContent && draftEditorContent.contentEditable === 'true') {
+      input = draftEditorContent;
+      console.log('[DM] 找到 Draft.js 输入框: .public-DraftEditor-content');
+    }
+    
+    // 方法2: 通过 aria-label 查找
+    if (!input) {
+      const ariaInput = $('div[contenteditable="true"][aria-label="发送消息..."]');
+      if (ariaInput) {
+        input = ariaInput;
+        console.log('[DM] 找到 aria-label="发送消息..." 输入框');
+      }
+    }
+    
+    // 方法3: role=textbox
+    if (!input) {
+      const roleInput = $('div[contenteditable="true"][role="textbox"]');
+      if (roleInput && roleInput.getAttribute('aria-label')?.includes('消息')) {
+        input = roleInput;
+        console.log('[DM] 找到 role=textbox 输入框');
+      }
+    }
+    
+    // 方法4: 通用选择器
+    if (!input) {
+      const selectors = [
+        'div[contenteditable="true"][aria-label*="message" i]',
+        'div[contenteditable="true"][aria-label*="消息" i]',
+        'div[contenteditable="true"][aria-label*="发送" i]',
+        'textarea[placeholder*="message" i]',
+        'textarea[placeholder*="消息" i]',
+        '[data-e2e="message-input-area"]',
+        '[data-e2e="dm-editor"]',
+        '[data-e2e="dm-new-input-editor"]',
+      ];
+      
+      for (const sel of selectors) {
+        const el = $(sel);
+        if (el && el.offsetParent !== null) {
+          input = el;
+          console.log('[DM] 找到输入框:', sel);
+          break;
+        }
       }
     }
     
@@ -467,6 +608,13 @@
       console.log('[DM] 未找到输入框');
       return false;
     }
+    
+    console.log('[DM] 元素详情:', {
+      tagName: input.tagName,
+      className: input.className.substring(0, 100),
+      ariaLabel: input.getAttribute('aria-label'),
+      dataEditor: input.getAttribute('data-editor')
+    });
     
     await delay(0.5);
     
