@@ -1,141 +1,143 @@
 # TikTok 达人私信工具
 
-TikTok 自动化私信脚本，支持防检测，可连接员工机器 Chrome 执行私信发送。
-
-## 功能
-
-- ✅ 防检测（playwright-stealth + 人类行为模拟）
-- ✅ 连接远程 Chrome（员工机器）
-- ✅ 关注 + 私信发送
-- ✅ 随机延迟，降低风控风险
+三种发送 TikTok 达人私信的方法，从简单到复杂，适合不同需求的用户。
 
 ---
 
-## 快速安装（推荐）
+## 方法一览
 
-员工电脑上只需安装 Python（3分钟），然后一行命令搞定一切：
-
-### macOS / Linux
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/robinzhang/guanchao/main/install.sh | bash
-```
-
-### Windows
-
-下载 [install_tiktok_dm.bat](https://raw.githubusercontent.com/robinzhang/guanchao/main/install_tiktok_dm.bat)，双击运行即可。
+| 方法 | 难度 | 防检测 | 需要设备 | 推荐指数 |
+|------|------|--------|---------|---------|
+| 方法三：浏览器插件 | ⭐ 简单 | ⭐⭐⭐ 难检测 | 电脑 + Chrome | ⭐⭐⭐⭐⭐ |
+| 方法二：手机自动化 | ⭐⭐⭐ 中等 | ⭐⭐⭐⭐ 很稳 | 电脑 + 安卓手机 | ⭐⭐⭐⭐ |
+| 方法一：浏览器自动化 | ⭐⭐ 较简单 | ⭐⭐ 易被拦 | 电脑 + Chrome | ⭐⭐⭐ |
 
 ---
 
-安装脚本会自动完成：
-1. 检查并安装 Python 依赖（playwright、playwright-stealth）
-2. 安装 Chromium 浏览器
-3. 下载私信脚本到桌面
+## 方法三：浏览器插件（最简单，推荐小白）
+
+### 安装步骤
+
+1. 打开 Chrome，输入 `chrome://extensions/`
+2. 右上角开启「开发者模式」
+3. 点击「加载已解压的扩展程序」
+4. 选择 `tiktok-dm-extension` 文件夹
+
+### 使用步骤
+
+1. 用 Chrome 打开 https://www.tiktok.com 并登录
+2. 进入达人主页
+3. 点击 Chrome 右上角的 📩 图标
+4. 输入私信内容，点击发送
+
+👉 **详细教程请看：[TIKTOK_DM教程.md](./TIKTOK_DM教程.md)**
 
 ---
 
-## 快速使用
+## 方法二：手机自动化（最稳定，推荐有安卓手机的用户）
 
-### 第一步：启动 Chrome
+### 准备工作
 
-**macOS：**
-```bash
-open -a "Google Chrome" --args --remote-debugging-port=9222
-```
+- 安卓手机一台（红米、华为、三星等均可）
+- 手机和电脑在同一 WiFi 网络
 
-**Windows：**
-```cmd
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --profile-directory="Profile 2"
-```
+### 配置步骤
 
-**Linux：**
-```bash
-google-chrome --remote-debugging-port=9222
-```
+1. 手机开启开发者模式（连续点击版本号 7 次）
+2. 手机开启 USB 调试
+3. 手机连接电脑，运行 `adb tcpip 5555`
+4. 查看手机 IP 地址（设置 → WLAN → 已连接网络）
+5. 电脑运行 `adb connect 手机IP:5555`
+6. 手机上安装并登录 TikTok
 
-### 第二步：发送私信
+### 使用
 
 ```bash
-python tiktok_dm_stealth.py https://www.tiktok.com/@username "你好，欢迎关注！"
+# 交互式（一步步输入）
+python tiktok_dm_mobile.py
+
+# 直接指定参数
+python tiktok_dm_mobile.py https://www.tiktok.com/@用户名 私信内容
 ```
 
-参数说明：
-- `tiktok_dm_stealth.py` → 脚本文件名
-- 第一个参数 → TikTok 主页链接
-- 第二个参数 → 私信内容
+👉 **详细教程请看：[TIKTOK_DM教程.md](./TIKTOK_DM教程.md)**
 
 ---
 
-## 使用方法（详细）
+## 方法一：浏览器自动化（较简单，但容易被检测）
 
-### 方式一：一键安装 EXE（待作者发布 Release）
-
-1. 去 [Releases](https://github.com/robinzhang/guanchao/releases) 下载 `TikTokDM.exe`
-2. 员工电脑上安装 Playwright 浏览器：`playwright install chromium`
-3. 启动 Chrome 并开启调试端口
-4. 双击运行 `TikTokDM.exe`
-
-### 方式二：源码运行
+### 安装依赖
 
 ```bash
 pip install playwright playwright-stealth
 playwright install chromium
-python tiktok_dm_stealth.py <tiktok_url> <message>
 ```
 
-### 方式三：一键安装脚本（macOS / Linux）
+### 配置 Chrome
 
-一行命令自动安装所有依赖和脚本：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/robinzhang/guanchao/main/install.sh | bash
-```
-
-### 方式四：一键安装脚本（Windows）
-
-下载 [install_tiktok_dm.bat](https://raw.githubusercontent.com/robinzhang/guanchao/main/install_tiktok_dm.bat) 双击运行，自动完成安装。
-
----
-
-## 员工机器配置
-
-### 创建独立的 Chrome Profile（重要）
-
-建议专门创建一个 Chrome 配置文件用于自动化操作：
-1. 打开 Chrome → 点击右上角头像 → 添加 → 新建配置文件
-2. 命名为如「自动化」，登录 TikTok 账号
-3. 使用该 Profile 启动调试模式
-
-### 启动 Chrome 调试模式
-
-**Windows：**
 ```cmd
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --profile-directory="Profile 2"
-```
+# Windows
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
 
-**macOS：**
-```bash
+# macOS
 open -a "Google Chrome" --args --remote-debugging-port=9222
 ```
 
-**Linux：**
-```bash
-google-chrome --remote-debugging-port=9222
-```
-
-### 连接远程 Chrome
-
-当 Chrome 运行在另一台员工机器上时：
+### 使用
 
 ```bash
-TikTokDM.exe --cdp http://员工IP:9222 https://www.tiktok.com/@username "私信内容"
+python tiktok_dm_stealth.py https://www.tiktok.com/@用户名 私信内容
 ```
 
 ---
 
-## 防风控建议
+## 详细教程
 
-- 使用老账号（活跃时间长的账号）
-- 每天发送不超过 **30 条**
-- 私信内容多样化，避免明显广告语
-- 控制发送频率，间隔至少 **1 分钟**以上
+👉 **[TIKTOK_DM教程.md](./TIKTOK_DM教程.md)** - 包含三种方法的完整图文教程，适合小白用户
+
+---
+
+## 批量发送的最佳实践
+
+| 场景 | 推荐方法 |
+|------|---------|
+| 每天发 20-50 条 | 方法三（插件）+ 手动操作 |
+| 每天发 50-200 条 | 方法二（手机自动化） |
+| 每天发 200+ 条 | 方法二 + 多台手机 |
+
+### 降低被检测的技巧
+
+1. **间隔要随机**：25-60 秒随机，不要固定
+2. **内容要变化**：避免发完全相同的文字
+3. **不要连发**：每发 5-10 条后休息 10-15 分钟
+4. **用老账号**：新账号更容易被风控
+5. **有条件优先用手机方案**：方法二最稳
+
+---
+
+## 文件结构
+
+```
+guanchao/
+├── tiktok_dm_stealth.py      # 方法一：浏览器自动化
+├── tiktok_dm_mobile.py        # 方法二：手机自动化
+├── tiktok-dm-extension/       # 方法三：浏览器插件
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   ├── content.js
+│   └── icons/
+├── TIKTOK_DM教程.md           # 详细使用教程（小白必看）
+├── install.sh                  # Linux/Mac 一键安装
+└── install_tiktok_dm.bat       # Windows 一键安装
+```
+
+---
+
+## 技术支持
+
+遇到问题请提供：
+1. 使用的方法（方法一/二/三）
+2. 电脑系统（Windows/Mac）
+3. 手机型号（如果用了方法二）
+4. 具体的错误信息或截图
