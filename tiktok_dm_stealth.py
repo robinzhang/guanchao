@@ -382,57 +382,47 @@ def search_creator(page, creator_id):
     
     input_found = False
     
-    # 先尝试点击搜索按钮（不是输入框）
-    search_button_selectors = [
-        'button[data-e2e="nav-search"]',
-        'button[aria-label="搜索"]',
-        'button[aria-label="Search" i]',
-        'button[role="searchbox"]',
-        'button.TUXButton--capsule',
-        '[data-e2e="nav-search"]',
-    ]
+    # 先尝试点击搜索按钮（不是输入框）- 使用最精确的选择器
+    search_button_selector = 'button[data-e2e="nav-search"]'
     
-    for selector in search_button_selectors:
-        try:
-            btn = page.locator(selector).first
-            if btn.is_visible(timeout=2000):
-                class_name = btn.get_attribute('class') or ''
-                print(f"   🔍 找到搜索按钮: {selector} | class: {class_name[:50]}")
-                
-                btn.click()
-                print(f"   ✅ 点击了搜索按钮")
-                time.sleep(random.uniform(10, 30))  # 等待搜索弹窗出现
-                
-                # 点击后，查找弹出的搜索输入框
-                search_input_selectors = [
-                    # TikTok 搜索表单
-                    'form[data-e2e="search-box"] input',
-                    'input[data-e2e="search-user-input"]',
-                    'input[placeholder*="Search" i]',
-                    'input[placeholder*="搜索" i]',
-                    'input[class*="search-input" i]',
-                    'input[class*="SearchInput" i]',
-                    'input[type="search"]',
-                    '#header-search input',
-                ]
-                
-                for input_sel in search_input_selectors:
-                    try:
-                        inp = page.locator(input_sel).first
-                        if inp.is_visible(timeout=2000):
-                            print(f"   🔍 找到搜索输入框: {input_sel}")
-                            inp.fill(creator_id)
-                            time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
-                            input_found = True
-                            print(f"   ✅ 在搜索输入框输入: @{creator_id}")
-                            break
-                    except:
-                        continue
-                
-                if input_found:
-                    break
-        except Exception as e:
-            continue
+    try:
+        btn = page.locator(search_button_selector).first
+        if btn.is_visible(timeout=2000):
+            class_name = btn.get_attribute('class') or ''
+            print(f"   🔍 找到搜索按钮: {search_button_selector} | class: {class_name[:50]}")
+            
+            btn.click()
+            print(f"   ✅ 点击了搜索按钮")
+            time.sleep(random.uniform(10, 30))  # 等待搜索弹窗出现
+            
+            # 点击后，查找弹出的搜索输入框
+            search_input_selectors = [
+                # TikTok 搜索表单
+                'form[data-e2e="search-box"] input',
+                'input[data-e2e="search-user-input"]',
+                'input[placeholder*="Search" i]',
+                'input[placeholder*="搜索" i]',
+                'input[class*="search-input" i]',
+                'input[class*="SearchInput" i]',
+                'input[type="search"]',
+            ]
+            
+            for input_sel in search_input_selectors:
+                try:
+                    inp = page.locator(input_sel).first
+                    if inp.is_visible(timeout=2000):
+                        print(f"   🔍 找到搜索输入框: {input_sel}")
+                        inp.fill(creator_id)
+                        time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
+                        input_found = True
+                        print(f"   ✅ 在搜索输入框输入: @{creator_id}")
+                        break
+                except:
+                    continue
+        else:
+            print(f"   ⚠️ 未找到搜索按钮: {search_button_selector}")
+    except Exception as e:
+        print(f"   ⚠️ 点击搜索按钮出错: {e}")
     
     # 方法2: 如果没找到搜索框，尝试点击搜索图标打开搜索框
     if not input_found:
@@ -524,49 +514,44 @@ def click_search_result(page, creator_id):
     except Exception as e:
         print(f"   ⚠️ 点击用户 tab 出错: {e}")
     
-    # 方法2: 直接在搜索结果中找达人
-    # 搜索结果中的用户卡片 - TikTok 搜索结果结构
-    user_card_selectors = [
-        # 直接包含达人 ID 的链接
-        f'a[href*="/@{creator_id}"]',
-        # 搜索结果中的用户卡片
-        f'div[class*="UserCard"] a[href*="/@{creator_id}"]',
-        f'div[class*="UserItem"] a[href*="/@{creator_id}"]',
-        f'div[class*="user-card"] a[href*="/@{creator_id}"]',
-        # 泛用用户链接（带 @ 的）
-        'a[href*="/@"][href*="follow"]',
-        'a[href*="/@"][data-e2e*="user"]',
-        # 任意包含达人名字的用户链接
-        f'[class*="search"] a:has-text("{creator_id}")',
-        f'[class*="result"] a:has-text("{creator_id}")',
-        # 泛型用户卡片
-        'div[class*="search"] a[href*="/@"]',
-        'div[class*="user"] a[href*="/@"]',
-    ]
-    
+    # 方法2: 直接点击搜索结果中的达人链接
     print(f"   🔍 开始查找达人 @{creator_id}...")
     
-    for selector in user_card_selectors:
-        try:
-            locators = page.locator(selector).all()
-            for locator in locators:
-                if locator.is_visible(timeout=1000):
-                    href = locator.get_attribute('href') or ''
-                    text = locator.inner_text() or ''
-                    print(f"   🔍 找到候选: {selector} | href: {href[:50]} | text: {text[:30]}")
-                    
-                    # 检查是否是达人主页链接
-                    if creator_id in href and '/@' in href:
-                        box = locator.bounding_box()
-                        if box:
-                            human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
-                            time.sleep(random.uniform(10, 30))  # 移动到按钮后等待 10-30 秒
-                            locator.click()
-                            print(f"   ✅ 点击达人主页: {href}")
-                            time.sleep(random.uniform(10, 30))  # 点击后等待 10-30 秒
-                            return True
-        except Exception as e:
-            continue
+    # 最简单的选择器：直接找包含达人ID的链接
+    try:
+        # 直接使用 href 匹配
+        creator_link = page.locator(f'a[href*="{creator_id}"]').first
+        if creator_link.is_visible(timeout=3000):
+            href = creator_link.get_attribute('href') or ''
+            print(f"   🔍 找到达人链接: {href}")
+            
+            # 直接导航到完整 URL
+            if href.startswith('http'):
+                full_url = href
+            else:
+                full_url = 'https://www.tiktok.com' + href
+            
+            print(f"   🔄 直接导航到: {full_url}")
+            page.goto(full_url, wait_until="domcontentloaded")
+            time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
+            return True
+    except Exception as e:
+        print(f"   ⚠️ 查找达人链接出错: {e}")
+    
+    # 如果直接导航失败，尝试点击
+    try:
+        clickable = page.locator(f'a[href*="/@{creator_id}"]').first
+        if clickable.is_visible(timeout=2000):
+            box = clickable.bounding_box()
+            if box:
+                human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                time.sleep(random.uniform(10, 30))
+                clickable.click()
+                print(f"   ✅ 点击了达人链接")
+                time.sleep(random.uniform(10, 30))
+                return True
+    except Exception as e:
+        print(f"   ⚠️ 点击达人链接出错: {e}")
     
     # 方法3: 如果以上都失败，直接导航
     print(f"   ⚠️ 未在搜索结果中找到达人，直接导航")
@@ -784,48 +769,55 @@ def run_dm_task(tiktok_url, message):
             
             # 再次确保在页面顶部
             page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(10, 30))
             
             # 消息按钮选择器（按优先级）
             message_selectors = [
-                # TikTok 达人主页头部的消息按钮
+                # TikTok 达人主页的消息按钮 - 最精确
                 'button[data-e2e="message-button"]',
+                'button.tux-button__element[data-e2e="message-button"]',
+                # 其他选择器
                 '[data-e2e="contact-msg-btn"]',
                 '[data-e2e="message-button"]',
-                'button.tux-button__element',
                 # 精确匹配文字
                 'button:has-text("消息")',
                 'button:has-text("发消息")',
                 'button:has-text("Message")',
                 # 备选
+                'a:has-text("消息")',
                 'a:has-text("发消息")',
-                'a:has-text("Message")',
             ]
             
             message_clicked = False
+            
+            # 先滚动到页面顶部
+            page.evaluate("window.scrollTo(0, 0)")
+            time.sleep(random.uniform(10, 30))
+            
             for selector in message_selectors:
                 try:
                     locator = page.locator(selector).first
                     if locator.is_visible(timeout=2000):
                         box = locator.bounding_box()
                         if box:
+                            print(f"   🔍 检查消息按钮: {selector} | y: {box['y']:.0f} | h: {box['height']:.0f}")
                             center_x = box["x"] + box["width"] / 2
                             center_y = box["y"] + box["height"] / 2
-                            # 只在屏幕上部区域（profile header）
-                            if center_y < 500:
+                            
+                            # 如果按钮在可视区域内，点击它
+                            if center_y > 0 and center_y < 2000:  # 在可视区域内
                                 human_mouse_move(page, center_x, center_y)
-                                time.sleep(random.uniform(0.3, 0.6))
+                                time.sleep(random.uniform(10, 30))
                                 locator.click()
                                 print(f"   ✅ 已点击消息按钮: {selector}")
                                 message_clicked = True
                                 break
-                except Exception:
+                except Exception as e:
                     continue
             
             if not message_clicked:
-                print("   ⚠️ 未找到消息按钮或点击失败")
-                # 如果是直接进入消息页面的 URL，尝试直接导航
-                print("   🔄 尝试直接进入消息页面...")
+                print("   ⚠️ 未找到消息按钮，尝试直接进入消息页面")
+                print(f"   🔄 导航到: https://www.tiktok.com/@{creator_id}/messages")
                 page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
             
             time.sleep(random.uniform(10, 30))
