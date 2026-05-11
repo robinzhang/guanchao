@@ -708,7 +708,7 @@ def run_dm_task(tiktok_url, message):
             
             # 先滚动到页面顶部，确保看到 profile header
             page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(10, 30))  # 滚动后等待 10-30 秒
             
             # 检查是否已经关注
             try:
@@ -716,14 +716,17 @@ def run_dm_task(tiktok_url, message):
                 if following_btn.is_visible(timeout=2000):
                     print("   ℹ️ 已经关注该达人，跳过关注")
                 else:
-                    # 点击关注按钮
+                    # 优先点击"关注"按钮，不是"回关"
                     follow_selectors = [
-                        # 达人主页头部的关注按钮
-                        '[data-e2e="follow-user-button"]',
+                        # 达人主页头部的关注按钮 - 精确匹配
+                        'button[data-e2e="follow-button"]',
+                        'button[data-e2e="follow-user-button"]',
+                        # 精确匹配"关注"文字（不是回关）
+                        'button[data-e2e="follow-button"]:has-text("关注")',
+                        'button[data-e2e="follow-user-button"]:has-text("关注")',
+                        # 备选：其他属性
                         '[data-e2e="follow-button"]',
-                        # 精确匹配关注文字
-                        'button:has-text("关注")',
-                        'div:has-text("关注") >> button',
+                        '[data-e2e="follow-user-button"]',
                     ]
                     
                     follow_clicked = False
@@ -731,14 +734,16 @@ def run_dm_task(tiktok_url, message):
                         try:
                             locator = page.locator(selector).first
                             if locator.is_visible(timeout=2000):
-                                box = locator.bounding_box()
-                                if box:
-                                    center_x = box["x"] + box["width"] / 2
-                                    center_y = box["y"] + box["height"] / 2
-                                    # 只在屏幕上部区域（profile header）
-                                    if center_y < 500:
-                                        human_mouse_move(page, center_x, center_y)
-                                        time.sleep(random.uniform(0.3, 0.6))
+                                # 获取按钮文字
+                                btn_text = locator.inner_text() or ''
+                                print(f"   🔍 检查按钮: {selector} | 文字: {btn_text}")
+                                
+                                # 如果是"关注"按钮才点击
+                                if '关注' in btn_text and '回关' not in btn_text:
+                                    box = locator.bounding_box()
+                                    if box and box['y'] < 500:  # 只在屏幕上部区域
+                                        human_mouse_move(page, box['x'] + box['width']/2, box['y'] + box['height']/2)
+                                        time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
                                         locator.click()
                                         print(f"   ✅ 已点击关注按钮: {selector}")
                                         follow_clicked = True
@@ -746,7 +751,18 @@ def run_dm_task(tiktok_url, message):
                         except Exception:
                             continue
                     
+                    # 如果没找到"关注"，检查是否有"回关"
                     if not follow_clicked:
+                        print("   ⚠️ 未找到"关注"按钮，检查是否有"回关"...")
+                        try:
+                            back_follow_btn = page.locator('button[data-e2e="follow-button"]:has-text("回关")')
+                            if back_follow_btn.is_visible(timeout=2000):
+                                print("   ℹ️ 对方已关注你，显示为"回关"，跳过")
+                        except:
+                            pass
+                    
+                    if not follow_clicked:
+                        print("   ⚠️ 未找到关注按钮")
                         print("   ⚠️ 未找到关注按钮或点击失败")
                         
             except Exception as e:
