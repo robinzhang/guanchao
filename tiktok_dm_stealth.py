@@ -579,24 +579,57 @@ def run_dm_task(tiktok_url, message):
             time.sleep(random.uniform(3, 8))
 
             # ========================================
-            # 步骤2：点击关注
+            # 步骤2：滚动到顶部，点击头像右侧的关注
             # ========================================
-            print("\n📍 步骤2: 点击关注...")
-            follow_selectors = [
-                '[data-e2e="follow-user-button"]',
-                '[data-e2e="follow-button"]',
-                'button:has-text("关注")',
-                '[class*="follow"]',
-            ]
+            print("\n📍 步骤2: 点击头像右侧的关注按钮...")
             
-            if not click_element(page, follow_selectors, "关注"):
-                # 可能已经在关注列表中，检查是否已关注
-                if page.locator('[data-e2e="following-button"]').is_visible(timeout=2000):
-                    print("   ℹ️ 已经关注该达人")
+            # 先滚动到页面顶部，确保看到 profile header
+            page.evaluate("window.scrollTo(0, 0)")
+            time.sleep(random.uniform(1, 2))
+            
+            # 检查是否已经关注
+            try:
+                following_btn = page.locator('[data-e2e="following-button"]')
+                if following_btn.is_visible(timeout=2000):
+                    print("   ℹ️ 已经关注该达人，跳过关注")
                 else:
-                    print("   ⚠️ 关注操作可能失败，继续")
+                    # 点击关注按钮
+                    follow_selectors = [
+                        # 达人主页头部的关注按钮
+                        '[data-e2e="follow-user-button"]',
+                        '[data-e2e="follow-button"]',
+                        # 精确匹配关注文字
+                        'button:has-text("关注")',
+                        'div:has-text("关注") >> button',
+                    ]
+                    
+                    follow_clicked = False
+                    for selector in follow_selectors:
+                        try:
+                            locator = page.locator(selector).first
+                            if locator.is_visible(timeout=2000):
+                                box = locator.bounding_box()
+                                if box:
+                                    center_x = box["x"] + box["width"] / 2
+                                    center_y = box["y"] + box["height"] / 2
+                                    # 只在屏幕上部区域（profile header）
+                                    if center_y < 500:
+                                        human_mouse_move(page, center_x, center_y)
+                                        time.sleep(random.uniform(0.3, 0.6))
+                                        locator.click()
+                                        print(f"   ✅ 已点击关注按钮: {selector}")
+                                        follow_clicked = True
+                                        break
+                        except Exception:
+                            continue
+                    
+                    if not follow_clicked:
+                        print("   ⚠️ 未找到关注按钮或点击失败")
+                        
+            except Exception as e:
+                print(f"   ⚠️ 检查关注状态出错: {e}")
             
-            time.sleep(random.uniform(1, 3))
+            time.sleep(random.uniform(2, 4))
 
             # ========================================
             # 步骤3：再次检查人机验证
@@ -606,42 +639,115 @@ def run_dm_task(tiktok_url, message):
                 return False
 
             # ========================================
-            # 步骤4：点击消息
+            # 步骤4：点击头像右侧的消息按钮
             # ========================================
-            print("\n📍 步骤3: 点击消息...")
+            print("\n📍 步骤3: 点击头像右侧的消息按钮...")
             
-            # 再次滚动确保消息按钮可见
-            human_scroll(page, 'down', random.randint(200, 500))
+            # 再次确保在页面顶部
+            page.evaluate("window.scrollTo(0, 0)")
             time.sleep(random.uniform(1, 2))
             
+            # 消息按钮选择器（按优先级）
             message_selectors = [
+                # TikTok 达人主页头部的消息按钮
                 '[data-e2e="contact-msg-btn"]',
                 '[data-e2e="message-button"]',
+                # 精确匹配
                 'a:has-text("发消息")',
                 'button:has-text("发消息")',
                 'a:has-text("Message")',
+                'button:has-text("Message")',
             ]
             
-            if not click_element(page, message_selectors, "消息"):
-                # 检查是否已经有私信对话框
-                if page.locator('div[contenteditable="true"][role="textbox"]').is_visible(timeout=2000):
-                    print("   ℹ️ 私信对话框已打开")
-                else:
-                    print("   ⚠️ 消息按钮未找到")
+            message_clicked = False
+            for selector in message_selectors:
+                try:
+                    locator = page.locator(selector).first
+                    if locator.is_visible(timeout=2000):
+                        box = locator.bounding_box()
+                        if box:
+                            center_x = box["x"] + box["width"] / 2
+                            center_y = box["y"] + box["height"] / 2
+                            # 只在屏幕上部区域（profile header）
+                            if center_y < 500:
+                                human_mouse_move(page, center_x, center_y)
+                                time.sleep(random.uniform(0.3, 0.6))
+                                locator.click()
+                                print(f"   ✅ 已点击消息按钮: {selector}")
+                                message_clicked = True
+                                break
+                except Exception:
+                    continue
+            
+            if not message_clicked:
+                print("   ⚠️ 未找到消息按钮或点击失败")
+                # 如果是直接进入消息页面的 URL，尝试直接导航
+                print("   🔄 尝试直接进入消息页面...")
+                page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
             
             time.sleep(random.uniform(3, 6))
 
             # ========================================
-            # 步骤5：再次检查人机验证
+            # 步骤5：检查是否进入消息页面/DM页面
             # ========================================
             if not check_and_handle_verification(page):
                 print("❌ 点击消息后触发了人机验证")
                 return False
+            
+            # 检查 URL 是否已经变成消息页面
+            current_url = page.url.lower()
+            print(f"   🔍 当前URL: {current_url}")
+            
+            # 如果 URL 没有变化，尝试直接进入消息页面
+            if '/messages' not in current_url and '/message' not in current_url:
+                print("   🔄 URL 未变化，直接进入消息页面...")
+                page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
+                time.sleep(random.uniform(2, 4))
+                
+                if not check_and_handle_verification(page):
+                    return False
 
             # ========================================
-            # 步骤6：输入私信
+            # 步骤6：在消息页面查找并打开与该达人的对话
             # ========================================
-            print("\n📍 步骤4: 输入私信...")
+            print("\n📍 步骤4: 在消息页面查找达人对话...")
+            
+            # 等待消息列表加载
+            time.sleep(random.uniform(2, 3))
+            
+            # 查找达人的对话
+            try:
+                # 方法1: 直接点击与该达人的对话链接
+                creator_link_selectors = [
+                    f'a[href*="/@{creator_id}"]',
+                    f'div[class*="conversation"]:has-text("{creator_id}")',
+                    f'div[class*="user"]:has-text("{creator_id}")',
+                    f'a[href*="messages"][href*="{creator_id}"]',
+                ]
+                
+                conversation_found = False
+                for selector in creator_link_selectors:
+                    try:
+                        locator = page.locator(selector).first
+                        if locator.is_visible(timeout=3000):
+                            locator.click()
+                            print(f"   ✅ 已点击达人对话: {selector}")
+                            conversation_found = True
+                            break
+                    except Exception:
+                        continue
+                
+                if not conversation_found:
+                    print("   ⚠️ 在消息列表中未找到达人对话")
+            except Exception as e:
+                print(f"   ⚠️ 查找对话出错: {e}")
+            
+            time.sleep(random.uniform(2, 3))
+
+            # ========================================
+            # 步骤7：输入私信
+            # ========================================
+            print("\n📍 步骤5: 输入私信...")
             print(f"   ✍️ 内容: {message}")
             
             if not find_and_type_message(page, message):
