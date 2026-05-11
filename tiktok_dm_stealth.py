@@ -773,13 +773,17 @@ def run_dm_task(tiktok_url, message):
             # 消息按钮选择器（按优先级）
             message_selectors = [
                 # TikTok 达人主页头部的消息按钮
+                'button[data-e2e="message-button"]',
                 '[data-e2e="contact-msg-btn"]',
                 '[data-e2e="message-button"]',
-                # 精确匹配
-                'a:has-text("发消息")',
+                'button.tux-button__element',
+                # 精确匹配文字
+                'button:has-text("消息")',
                 'button:has-text("发消息")',
-                'a:has-text("Message")',
                 'button:has-text("Message")',
+                # 备选
+                'a:has-text("发消息")',
+                'a:has-text("Message")',
             ]
             
             message_clicked = False
