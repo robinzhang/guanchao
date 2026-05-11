@@ -357,13 +357,22 @@ def search_creator(page, creator_id):
     """在搜索框搜索达人"""
     print(f"\n📍 搜索达人: @{creator_id}")
     
-    # 方法1: 点击搜索框输入
+    # 方法1: 尝试直接使用搜索框输入
     search_selectors = [
+        # TikTok 实际的搜索输入框
+        'input[placeholder*="Search" i]',
+        'input[placeholder*="搜索" i]',
+        'input[data-e2e="search-user-input"]',
+        'input[class*="SearchInput" i]',
+        'input[class*="search-input" i]',
+        'input[class*="search"][type="text"]',
         'input[type="search"]',
-        'input[placeholder*="Search"]',
-        'input[placeholder*="搜索"]',
-        '[data-e2e="search-user-input"]',
-        'input[class*="search"]',
+        'input[id*="search" i]',
+        'input[name*="search" i]',
+        # 备选：任意可能是搜索框的 input
+        '#header-search input',
+        'header input',
+        '[class*="header"] input[class*="search"]',
     ]
     
     input_found = False
@@ -371,28 +380,75 @@ def search_creator(page, creator_id):
         try:
             inp = page.locator(selector).first
             if inp.is_visible(timeout=2000):
+                # 获取元素信息用于调试
+                placeholder = inp.get_attribute('placeholder') or ''
+                class_name = inp.get_attribute('class') or ''
+                print(f"   🔍 尝试选择器: {selector} | placeholder: {placeholder}")
+                
                 inp.click()
-                time.sleep(random.uniform(0.2, 0.5))
+                time.sleep(random.uniform(0.3, 0.6))
+                
+                # 聚焦后清空并输入
+                inp.clear()
+                time.sleep(random.uniform(0.1, 0.2))
                 inp.fill(creator_id)
                 input_found = True
                 print(f"   ✅ 在搜索框输入: @{creator_id}")
                 break
-        except Exception:
+        except Exception as e:
             continue
     
-    # 方法2: 如果没找到搜索框，尝试直接导航
+    # 方法2: 如果没找到搜索框，尝试点击搜索图标打开搜索框
     if not input_found:
-        print("   ⚠️ 未找到搜索框，尝试直接搜索 URL")
-        search_url = f"https://www.tiktok.com/search?q={creator_id}"
+        print("   ⚠️ 未找到搜索框，尝试点击搜索图标")
+        search_icon_selectors = [
+            '[data-e2e="search-icon"]',
+            '[class*="search-icon"]',
+            '[class*="search"] svg',
+            'button[class*="search"]',
+            'a[class*="search"]',
+            '[aria-label*="Search" i]',
+            '[aria-label*="搜索" i]',
+        ]
+        
+        for selector in search_icon_selectors:
+            try:
+                icon = page.locator(selector).first
+                if icon.is_visible(timeout=1000):
+                    icon.click()
+                    time.sleep(random.uniform(0.5, 1))
+                    print(f"   ✅ 点击了搜索图标: {selector}")
+                    
+                    # 点击后再次尝试找搜索框
+                    for sel in search_selectors:
+                        try:
+                            inp = page.locator(sel).first
+                            if inp.is_visible(timeout=1000):
+                                inp.fill(creator_id)
+                                input_found = True
+                                print(f"   ✅ 点击图标后在搜索框输入: @{creator_id}")
+                                break
+                        except:
+                            continue
+                    
+                    if input_found:
+                        break
+            except:
+                continue
+    
+    # 方法3: 直接导航到搜索页面
+    if not input_found:
+        print("   ⚠️ 未找到搜索框，直接导航到搜索页面")
+        search_url = f"https://www.tiktok.com/search?q={creator_id}&t={int(time.time())}"
         page.goto(search_url, wait_until="domcontentloaded")
-        time.sleep(random.uniform(2, 4))
+        time.sleep(random.uniform(3, 5))
         return check_and_handle_verification(page)
     
     # 按回车搜索
     time.sleep(random.uniform(0.5, 1.5))
     page.keyboard.press("Enter")
     print("   ✅ 按下回车搜索")
-    time.sleep(random.uniform(2, 4))
+    time.sleep(random.uniform(3, 5))
     
     return check_and_handle_verification(page)
 
@@ -401,59 +457,81 @@ def click_search_result(page, creator_id):
     """点击搜索结果中的达人"""
     print(f"\n📍 查找达人 @{creator_id} 的搜索结果...")
     
+    # 先等待搜索结果加载
+    time.sleep(random.uniform(2, 3))
+    
     # 方法1: 点击用户 tab
     try:
         user_tab_selectors = [
+            'div[class*="tab"][class*="active"]',
             'div[class*="tab"]:has-text("用户")',
             'div[class*="tab"]:has-text("User")',
             'div[class*="tab"]:has-text("People")',
             '[class*="search-tab"]:has-text("用户")',
             '[class*="search-tab"]:has-text("People")',
+            # TikTok 实际的 tab
+            '[class*="Tab"]:has-text("用户")',
+            '[class*="Tab"]:has-text("User")',
         ]
         for selector in user_tab_selectors:
-            if page.locator(selector).first.is_visible(timeout=2000):
-                page.locator(selector).first.click()
-                print("   ✅ 点击用户 tab")
-                time.sleep(random.uniform(1, 2))
-                break
-    except Exception:
-        pass
+            try:
+                locator = page.locator(selector).first
+                if locator.is_visible(timeout=2000):
+                    locator.click()
+                    print(f"   ✅ 点击用户 tab: {selector}")
+                    time.sleep(random.uniform(2, 3))
+                    break
+            except:
+                continue
+    except Exception as e:
+        print(f"   ⚠️ 点击用户 tab 出错: {e}")
     
     # 方法2: 直接在搜索结果中找达人
-    # 搜索结果中的用户卡片
+    # 搜索结果中的用户卡片 - TikTok 搜索结果结构
     user_card_selectors = [
-        # 用户卡片
-        f'a[href*="/{creator_id}"]',
-        f'div[class*="user"]:has-text("{creator_id}")',
-        f'div[class*="creator"]:has-text("{creator_id}")',
-        f'div[class*="author"]:has-text("{creator_id}")',
-        # 通用用户链接
-        'a[href*="/@"]',
-        'div[class*="user-card"] a',
-        '[class*="search-result"] a[href*="@"]',
-        # 用户列表项
-        '[class*="user-list"] a',
-        '[class*="user-item"] a',
+        # 直接包含达人 ID 的链接
+        f'a[href*="/@{creator_id}"]',
+        # 搜索结果中的用户卡片
+        f'div[class*="UserCard"] a[href*="/@{creator_id}"]',
+        f'div[class*="UserItem"] a[href*="/@{creator_id}"]',
+        f'div[class*="user-card"] a[href*="/@{creator_id}"]',
+        # 泛用用户链接（带 @ 的）
+        'a[href*="/@"][href*="follow"]',
+        'a[href*="/@"][data-e2e*="user"]',
+        # 任意包含达人名字的用户链接
+        f'[class*="search"] a:has-text("{creator_id}")',
+        f'[class*="result"] a:has-text("{creator_id}")',
+        # 泛型用户卡片
+        'div[class*="search"] a[href*="/@"]',
+        'div[class*="user"] a[href*="/@"]',
     ]
+    
+    print(f"   🔍 开始查找达人 @{creator_id}...")
     
     for selector in user_card_selectors:
         try:
-            locator = page.locator(selector).first
-            if locator.is_visible(timeout=3000):
-                href = locator.get_attribute('href')
-                if href and '@' in href:
-                    box = locator.bounding_box()
-                    if box:
-                        human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
-                        time.sleep(random.uniform(0.3, 0.6))
-                        locator.click()
-                        print(f"   ✅ 点击达人主页: {href}")
-                        time.sleep(random.uniform(2, 4))
-                        return True
-        except Exception:
+            locators = page.locator(selector).all()
+            for locator in locators:
+                if locator.is_visible(timeout=1000):
+                    href = locator.get_attribute('href') or ''
+                    text = locator.inner_text() or ''
+                    print(f"   🔍 找到候选: {selector} | href: {href[:50]} | text: {text[:30]}")
+                    
+                    # 检查是否是达人主页链接
+                    if creator_id in href and '/@' in href:
+                        box = locator.bounding_box()
+                        if box:
+                            human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                            time.sleep(random.uniform(0.3, 0.6))
+                            locator.click()
+                            print(f"   ✅ 点击达人主页: {href}")
+                            time.sleep(random.uniform(2, 4))
+                            return True
+        except Exception as e:
             continue
     
-    print("   ⚠️ 未在搜索结果中找到达人")
+    # 方法3: 如果以上都失败，直接导航
+    print(f"   ⚠️ 未在搜索结果中找到达人，直接导航")
     return False
 
 
