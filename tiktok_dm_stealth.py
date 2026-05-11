@@ -629,7 +629,7 @@ def run_dm_task(tiktok_url, message):
             except Exception as e:
                 print(f"   ⚠️ 检查关注状态出错: {e}")
             
-            time.sleep(random.uniform(2, 4))
+            time.sleep(random.uniform(10, 30))
 
             # ========================================
             # 步骤3：再次检查人机验证
@@ -685,7 +685,7 @@ def run_dm_task(tiktok_url, message):
                 print("   🔄 尝试直接进入消息页面...")
                 page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
             
-            time.sleep(random.uniform(3, 6))
+            time.sleep(random.uniform(10, 30))
 
             # ========================================
             # 步骤5：检查是否进入消息页面/DM页面
@@ -702,7 +702,7 @@ def run_dm_task(tiktok_url, message):
             if '/messages' not in current_url and '/message' not in current_url:
                 print("   🔄 URL 未变化，直接进入消息页面...")
                 page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
-                time.sleep(random.uniform(2, 4))
+                time.sleep(random.uniform(10, 30))
                 
                 if not check_and_handle_verification(page):
                     return False
@@ -713,7 +713,7 @@ def run_dm_task(tiktok_url, message):
             print("\n📍 步骤4: 在消息页面查找达人对话...")
             
             # 等待消息列表加载
-            time.sleep(random.uniform(2, 3))
+            time.sleep(random.uniform(10, 30))
             
             # 查找达人的对话
             try:
@@ -742,7 +742,7 @@ def run_dm_task(tiktok_url, message):
             except Exception as e:
                 print(f"   ⚠️ 查找对话出错: {e}")
             
-            time.sleep(random.uniform(2, 3))
+            time.sleep(random.uniform(10, 30))
 
             # ========================================
             # 步骤7：输入私信
@@ -750,14 +750,19 @@ def run_dm_task(tiktok_url, message):
             print("\n📍 步骤5: 输入私信...")
             print(f"   ✍️ 内容: {message}")
             
+            # 输入前等待 10-30 秒
+            time.sleep(random.uniform(10, 30))
+            
             if not find_and_type_message(page, message):
                 print("   ⚠️ 输入可能失败")
+
+            # 输入后等待 10-30 秒再点击发送
+            time.sleep(random.uniform(10, 30))
 
             # ========================================
             # 步骤7：点击发送
             # ========================================
-            print("\n📍 步骤5: 点击发送...")
-            time.sleep(random.uniform(1, 2))
+            print("\n📍 步骤6: 点击发送...")
 
             send_selectors = [
                 'button:has-text("发送")',
@@ -770,13 +775,13 @@ def run_dm_task(tiktok_url, message):
                 print("   🔄 尝试按回车发送...")
                 page.keyboard.press("Enter")
 
-            time.sleep(2)
+            time.sleep(random.uniform(10, 30))
             
             # ========================================
             # 步骤8：检查结果
             # ========================================
             # 等待一小段时间看是否有错误提示
-            time.sleep(3)
+            time.sleep(random.uniform(10, 30))
             
             # 再次检查人机验证（发送后可能触发）
             if not check_and_handle_verification(page):
