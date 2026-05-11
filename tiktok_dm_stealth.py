@@ -747,7 +747,7 @@ def run_dm_task(tiktok_url, message):
                                 # 如果是"关注"按钮才点击
                                 if '关注' in btn_text and '回关' not in btn_text:
                                     box = locator.bounding_box()
-                                    if box and box['y'] < 500:  # 只在屏幕上部区域
+                                    if box:
                                         human_mouse_move(page, box['x'] + box['width']/2, box['y'] + box['height']/2)
                                         time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
                                         locator.click()
@@ -771,7 +771,7 @@ def run_dm_task(tiktok_url, message):
                                     back_btn = page.locator(back_sel).first
                                     if back_btn.is_visible(timeout=2000):
                                         back_box = back_btn.bounding_box()
-                                        if back_box and back_box['y'] < 500:
+                                        if back_box:
                                             print(f'   🔍 找到"回关"按钮，点击以回关')
                                             human_mouse_move(page, back_box['x'] + back_box['width']/2, back_box['y'] + back_box['height']/2)
                                             time.sleep(random.uniform(10, 30))
