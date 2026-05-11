@@ -397,14 +397,12 @@ def search_creator(page, creator_id):
             
             # 点击后，查找弹出的搜索输入框
             search_input_selectors = [
-                # TikTok 搜索表单
-                'form[data-e2e="search-box"] input',
+                # TikTok 搜索输入框 - 最精确
                 'input[data-e2e="search-user-input"]',
+                'input[type="search"]',
+                'input[placeholder="Search"]',
                 'input[placeholder*="Search" i]',
                 'input[placeholder*="搜索" i]',
-                'input[class*="search-input" i]',
-                'input[class*="SearchInput" i]',
-                'input[type="search"]',
             ]
             
             for input_sel in search_input_selectors:
@@ -736,15 +734,32 @@ def run_dm_task(tiktok_url, message):
                         except Exception:
                             continue
                     
-                    # 如果没找到"关注"，检查是否有"回关"
+                    # 如果没找到"关注"按钮，检查是否有"回关"并点击它
                     if not follow_clicked:
-                        print('   ⚠️ 未找到"关注"按钮，检查是否有"回关"...')
+                        print('   ⚠️ 未找到"关注"按钮，检查"回关"...')
                         try:
-                            back_follow_btn = page.locator('button[data-e2e="follow-button"]:has-text("回关")')
-                            if back_follow_btn.is_visible(timeout=2000):
-                                print('   ℹ️ 对方已关注你，显示为"回关"，跳过')
-                        except:
-                            pass
+                            # 查找回关按钮并点击（需要回关才能发消息）
+                            back_follow_selectors = [
+                                'button[data-e2e="follow-button"]:has-text("回关")',
+                                'button:has-text("回关")',
+                            ]
+                            for back_sel in back_follow_selectors:
+                                try:
+                                    back_btn = page.locator(back_sel).first
+                                    if back_btn.is_visible(timeout=2000):
+                                        back_box = back_btn.bounding_box()
+                                        if back_box and back_box['y'] < 500:
+                                            print(f'   🔍 找到"回关"按钮，点击以回关')
+                                            human_mouse_move(page, back_box['x'] + back_box['width']/2, back_box['y'] + back_box['height']/2)
+                                            time.sleep(random.uniform(10, 30))
+                                            back_btn.click()
+                                            print(f'   ✅ 已点击"回关"按钮')
+                                            follow_clicked = True
+                                            break
+                                except:
+                                    continue
+                        except Exception as e:
+                            print(f'   ⚠️ 检查回关按钮出错: {e}')
                     
                     if not follow_clicked:
                         print("   ⚠️ 未找到关注按钮")
@@ -775,17 +790,17 @@ def run_dm_task(tiktok_url, message):
             message_selectors = [
                 # TikTok 达人主页的消息按钮 - 最精确
                 'button[data-e2e="message-button"]',
-                'button.tux-button__element[data-e2e="message-button"]',
+                # 带文字验证
+                'button[data-e2e="message-button"]:has-text("Message")',
                 # 其他选择器
-                '[data-e2e="contact-msg-btn"]',
+                'button.tux-button__element:has-text("Message")',
                 '[data-e2e="message-button"]',
                 # 精确匹配文字
-                'button:has-text("消息")',
-                'button:has-text("发消息")',
                 'button:has-text("Message")',
+                'button:has-text("消息")',
                 # 备选
+                'a:has-text("Message")',
                 'a:has-text("消息")',
-                'a:has-text("发消息")',
             ]
             
             message_clicked = False
