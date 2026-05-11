@@ -834,13 +834,11 @@ def run_dm_task(tiktok_url, message):
                             center_x = box["x"] + box["width"] / 2
                             center_y = box["y"] + box["height"] / 2
                             
-                            # 如果按钮在可视区域内，点击它
-                            if center_y > 0 and center_y < 2000:
-                                human_mouse_move(page, center_x, center_y)
-                                time.sleep(random.uniform(10, 30))
-                                locator.click()
-                                print(f"   ✅ 已点击消息按钮: {selector}")
-                                message_clicked = True
+                            human_mouse_move(page, center_x, center_y)
+                            time.sleep(random.uniform(10, 30))
+                            locator.click()
+                            print(f"   ✅ 已点击消息按钮: {selector}")
+                            message_clicked = True
                                 
                                 # 点击后检查是否弹出登录对话框
                                 time.sleep(random.uniform(2, 3))  # 等待对话框出现
