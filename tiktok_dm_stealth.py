@@ -176,82 +176,84 @@ def scroll_and_watch(page, scroll_count=5):
         print(f"   👀 浏览第 {i+1}/{scroll_count} 个视频")
 
 
-def is_verification_page(page):
-    """检测是否有人机验证页面（精确版，减少误报）"""
+def is_verification_page(page, debug=False):
+    """检测是否有人机验证页面（极度保守版）
+    
+    只有在以下情况才返回 True:
+    1. URL 明确包含 captcha/verify/challenge 且不是 login/signup
+    2. 有明确包含验证文字的大尺寸模态框
+    3. 找到 TikTok 滑块验证码容器
+    """
     
     try:
-        # 方法1: 检查 TikTok 特定的验证码模态框
-        # 这是 TikTok 最常见的人机验证形式
-        modal_selectors = [
-            # 模态框/弹窗
-            'div[role="dialog"]',
-            'div[class*="Modal"]',
-            'div[class*="modal"]',
-            # 验证码容器
-            'div[id*="captcha"][class*="modal"]',
-            'div[class*="captcha"][class*="container"]',
-            'div[class*="captcha"][class*="box"]',
-            # 滑块验证
-            'div[class*="slider-captcha"]',
-            'div[class*="tcaptcha"]',
-            # Geetest 相关
-            'div[class*="geetest"]',
-            'canvas[class*="geetest"]',
-            # 极验
-            '[class*="verify"] > [class*="slide"]',
-            # 行为验证
-            'div[class*="verifybox"]',
-            'div[id*="captcha"]',
-            # TikTok 特定的验证码 iframe
-            'iframe[src*="captcha"][style*="hidden"]',
-        ]
-        
-        for selector in modal_selectors:
-            try:
-                locator = page.locator(selector).first
-                if locator.is_visible(timeout=500):
-                    # 额外检查：确保是真正的验证框，而不是普通弹窗
-                    box = locator.bounding_box()
-                    if box and box['width'] > 200 and box['height'] > 200:
-                        # 检查是否包含验证相关文字
-                        text_content = locator.inner_text().lower()
-                        verification_text = ['验证', '验证失败', 'captcha', 'verify', '人机', '点击', '滑动', '请在下方', '完成验证']
-                        if any(t in text_content for t in verification_text):
-                            print(f"   🔍 找到验证提示: {text_content[:100]}")
-                            return True
-            except Exception:
-                continue
-        
-        # 方法2: 检查 URL 是否真正在验证页面
+        # 1. 检查 URL - 最可靠的方式
         url = page.url.lower()
-        # 只有当 URL 明确包含验证相关路径时才返回 True
-        if ('captcha' in url or 'verify' in url) and ('tiktok' in url or 'js' in url):
-            # 确保不是在正常页面
-            if '/login' not in url and '/signup' not in url:
+        if debug:
+            print(f"   🔍 [调试] 当前URL: {url}")
+        
+        # URL 必须包含 captcha/verify/challenge 且不含 login/signup
+        url_indicators = ['captcha', 'verify/challenge', 'human/verify']
+        url_blocklist = ['login', 'signup', 'auth', 'signin', 'register']
+        
+        if any(ind in url for ind in url_indicators):
+            if not any(b in url for b in url_blocklist):
+                print(f"   🔍 [调试] URL 匹配验证条件")
                 return True
         
-        # 方法3: 检查页面是否有明显的验证UI
+        # 2. 检查 TikTok 特定的验证码 iframe
         try:
-            # 检查页面标题
-            title = page.title().lower()
-            if 'captcha' in title or '验证' in title:
-                return True
-        except Exception:
-            pass
-        
-        # 方法4: 检查 iframe 中的验证码
-        try:
-            iframes = page.locator('iframe')
-            for i in range(min(iframes.count(), 5)):
-                iframe = iframes.nth(i)
-                src = iframe.get_attribute('src') or ''
-                if 'captcha' in src.lower() or 'verify' in src.lower():
-                    if iframe.is_visible(timeout=1000):
-                        print(f"   🔍 找到验证 iframe: {src[:100]}")
+            captcha_iframes = page.locator('iframe[src*="captcha"], iframe[src*="tcaptcha"], iframe[id*="captcha"]')
+            if captcha_iframes.count() > 0:
+                for i in range(captcha_iframes.count()):
+                    iframe = captcha_iframes.nth(i)
+                    if iframe.is_visible(timeout=500):
+                        src = iframe.get_attribute('src') or ''
+                        print(f"   🔍 [调试] 找到验证码 iframe: {src[:80]}")
                         return True
         except Exception:
             pass
-            
+        
+        # 3. 检查 TikTok 滑块验证码容器
+        try:
+            slider_selectors = [
+                'div[id*="tcaptcha"]',
+                'div[class*="tcaptcha"]',
+                'div[id*="captcha"][class*="slide"]',
+                'div[class*="captcha"][id*="slider"]',
+                '#tcaptcha',
+                '.tcaptcha',
+            ]
+            for sel in slider_selectors:
+                locator = page.locator(sel).first
+                if locator.is_visible(timeout=500):
+                    box = locator.bounding_box()
+                    if box and box['width'] > 100 and box['height'] > 100:
+                        print(f"   🔍 [调试] 找到滑块验证码容器: {sel}")
+                        return True
+        except Exception:
+            pass
+        
+        # 4. 检查大尺寸模态框（需要同时满足：尺寸大 + 包含验证文字）
+        try:
+            dialogs = page.locator('div[role="dialog"]')
+            for i in range(min(dialogs.count(), 3)):
+                dialog = dialogs.nth(i)
+                if dialog.is_visible(timeout=500):
+                    box = dialog.bounding_box()
+                    if box and box['width'] > 300 and box['height'] > 300:
+                        text = dialog.inner_text().lower()
+                        verify_keywords = ['验证', '验证失败', 'captcha', 'verify', '滑动', '拼图', '请在下方', '完成验证', '点击验证']
+                        if any(kw in text for kw in verify_keywords):
+                            print(f"   🔍 [调试] 找到验证对话框: {text[:80]}")
+                            return True
+                        if debug:
+                            print(f"   🔍 [调试] 对话框无验证关键词: {text[:80]}")
+        except Exception:
+            pass
+        
+        if debug:
+            print(f"   🔍 [调试] 未检测到人机验证")
+        
     except Exception as e:
         print(f"   ⚠️ 验证检测出错: {e}")
     
@@ -313,19 +315,19 @@ def wait_for_verification(page, check_interval=5):
     return False
 
 
-def check_and_handle_verification(page, force_check=False):
+def check_and_handle_verification(page, force_check=False, debug=False):
     """检查并处理人机验证
     
     Args:
         page: Playwright page 对象
-        force_check: 是否强制检查（用于关键步骤后的检查）
+        force_check: 是否强制检查
+        debug: 是否打印调试信息
     """
-    result = is_verification_page(page)
+    result = is_verification_page(page, debug=debug)
     if result:
         print("   🔐 检测到可能的验证页面，开始监控...")
         return wait_for_verification(page)
     elif force_check:
-        # 强制检查时，即使没检测到也等待一下
         time.sleep(0.5)
     return True
 
@@ -462,7 +464,7 @@ def navigate_to_creator_via_search(page, creator_id):
     page.goto("https://www.tiktok.com", wait_until="domcontentloaded", timeout=30000)
     time.sleep(random.uniform(2, 4))
     
-    if not check_and_handle_verification(page):
+    if not check_and_handle_verification(page, debug=True):
         return False
     
     # 2. 搜索达人
