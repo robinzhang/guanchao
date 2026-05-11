@@ -753,11 +753,11 @@ def run_dm_task(tiktok_url, message):
                     
                     # 如果没找到"关注"，检查是否有"回关"
                     if not follow_clicked:
-                        print("   ⚠️ 未找到"关注"按钮，检查是否有"回关"...")
+                        print('   ⚠️ 未找到"关注"按钮，检查是否有"回关"...')
                         try:
                             back_follow_btn = page.locator('button[data-e2e="follow-button"]:has-text("回关")')
                             if back_follow_btn.is_visible(timeout=2000):
-                                print("   ℹ️ 对方已关注你，显示为"回关"，跳过")
+                                print('   ℹ️ 对方已关注你，显示为"回关"，跳过')
                         except:
                             pass
                     
