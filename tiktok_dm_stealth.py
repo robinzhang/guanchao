@@ -818,11 +818,11 @@ def run_dm_task(tiktok_url, message):
             
             # 消息按钮选择器（按优先级）
             message_selectors = [
-                # TikTok 达人主页的消息按钮 - 最精确特征 data-e2e="message-button"
+                # TikTok 达人主页消息链接 - <a href="/messages?...">
+                'a[href*="/messages"]',
+                # 消息按钮 - data-e2e="message-button" 是关键特征
                 'button[data-e2e="message-button"]',
-                # 备选
                 '[data-e2e="message-button"]',
-                'a:has-text("Message")',
                 'button:has-text("消息")',
             ]
             
@@ -842,13 +842,27 @@ def run_dm_task(tiktok_url, message):
                             center_x = box["x"] + box["width"] / 2
                             center_y = box["y"] + box["height"] / 2
                             
-                            # 如果按钮在可视区域内，点击它
-                            if center_y > 0 and center_y < 2000:  # 在可视区域内
-                                human_mouse_move(page, center_x, center_y)
-                                time.sleep(random.uniform(10, 30))
-                                locator.click()
-                                print(f"   ✅ 已点击消息按钮: {selector}")
-                                message_clicked = True
+                            # 如果按钮在可视区域内
+                            if center_y > 0 and center_y < 2000:
+                                # 如果是 <a> 链接到 /messages，直接导航
+                                if selector == 'a[href*="/messages"]':
+                                    href = locator.get_attribute('href')
+                                    if href:
+                                        # 处理相对 URL
+                                        if href.startswith('http'):
+                                            full_url = href
+                                        else:
+                                            full_url = 'https://www.tiktok.com' + href
+                                        print(f"   🔄 导航到消息页面: {full_url}")
+                                        page.goto(full_url, wait_until="domcontentloaded")
+                                        message_clicked = True
+                                else:
+                                    # 其他按钮，正常点击
+                                    human_mouse_move(page, center_x, center_y)
+                                    time.sleep(random.uniform(10, 30))
+                                    locator.click()
+                                    print(f"   ✅ 已点击消息按钮: {selector}")
+                                    message_clicked = True
                                 
                                 # 点击后检查是否弹出登录对话框
                                 time.sleep(random.uniform(2, 3))  # 等待对话框出现
