@@ -386,12 +386,13 @@ def search_creator(page, creator_id):
                 print(f"   🔍 尝试选择器: {selector} | placeholder: {placeholder}")
                 
                 inp.click()
-                time.sleep(random.uniform(0.3, 0.6))
+                time.sleep(random.uniform(10, 30))  # 点击搜索框后等待 10-30 秒
                 
                 # 聚焦后清空并输入
                 inp.clear()
-                time.sleep(random.uniform(0.1, 0.2))
+                time.sleep(random.uniform(10, 30))  # 清空后等待 10-30 秒
                 inp.fill(creator_id)
+                time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
                 input_found = True
                 print(f"   ✅ 在搜索框输入: @{creator_id}")
                 break
@@ -416,7 +417,7 @@ def search_creator(page, creator_id):
                 icon = page.locator(selector).first
                 if icon.is_visible(timeout=1000):
                     icon.click()
-                    time.sleep(random.uniform(0.5, 1))
+                    time.sleep(random.uniform(10, 30))  # 点击图标后等待 10-30 秒
                     print(f"   ✅ 点击了搜索图标: {selector}")
                     
                     # 点击后再次尝试找搜索框
@@ -424,7 +425,9 @@ def search_creator(page, creator_id):
                         try:
                             inp = page.locator(sel).first
                             if inp.is_visible(timeout=1000):
+                                time.sleep(random.uniform(10, 30))  # 找到输入框后等待 10-30 秒
                                 inp.fill(creator_id)
+                                time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
                                 input_found = True
                                 print(f"   ✅ 点击图标后在搜索框输入: @{creator_id}")
                                 break
@@ -441,14 +444,14 @@ def search_creator(page, creator_id):
         print("   ⚠️ 未找到搜索框，直接导航到搜索页面")
         search_url = f"https://www.tiktok.com/search?q={creator_id}&t={int(time.time())}"
         page.goto(search_url, wait_until="domcontentloaded")
-        time.sleep(random.uniform(3, 5))
+        time.sleep(random.uniform(10, 30))  # 导航到搜索页后等待 10-30 秒
         return check_and_handle_verification(page)
     
     # 按回车搜索
-    time.sleep(random.uniform(0.5, 1.5))
+    time.sleep(random.uniform(10, 30))  # 按回车前等待 10-30 秒
     page.keyboard.press("Enter")
     print("   ✅ 按下回车搜索")
-    time.sleep(random.uniform(3, 5))
+    time.sleep(random.uniform(10, 30))  # 按回车后等待 10-30 秒
     
     return check_and_handle_verification(page)
 
@@ -458,7 +461,7 @@ def click_search_result(page, creator_id):
     print(f"\n📍 查找达人 @{creator_id} 的搜索结果...")
     
     # 先等待搜索结果加载
-    time.sleep(random.uniform(2, 3))
+    time.sleep(random.uniform(10, 30))  # 等待搜索结果加载 10-30 秒
     
     # 方法1: 点击用户 tab
     try:
@@ -479,7 +482,7 @@ def click_search_result(page, creator_id):
                 if locator.is_visible(timeout=2000):
                     locator.click()
                     print(f"   ✅ 点击用户 tab: {selector}")
-                    time.sleep(random.uniform(2, 3))
+                    time.sleep(random.uniform(10, 30))  # 点击后等待 10-30 秒
                     break
             except:
                 continue
@@ -522,10 +525,10 @@ def click_search_result(page, creator_id):
                         box = locator.bounding_box()
                         if box:
                             human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
-                            time.sleep(random.uniform(0.3, 0.6))
+                            time.sleep(random.uniform(10, 30))  # 移动到按钮后等待 10-30 秒
                             locator.click()
                             print(f"   ✅ 点击达人主页: {href}")
-                            time.sleep(random.uniform(2, 4))
+                            time.sleep(random.uniform(10, 30))  # 点击后等待 10-30 秒
                             return True
         except Exception as e:
             continue
@@ -540,17 +543,24 @@ def navigate_to_creator_via_search(page, creator_id):
     # 1. 首先确保在 TikTok 首页
     print("\n📍 步骤1: 打开 TikTok 首页...")
     page.goto("https://www.tiktok.com", wait_until="domcontentloaded", timeout=30000)
-    time.sleep(random.uniform(2, 4))
+    time.sleep(random.uniform(10, 30))  # 打开首页后等待 10-30 秒
     
     if not check_and_handle_verification(page, debug=True):
         return False
+    
+    # 步骤之间等待 10-30 秒
+    time.sleep(random.uniform(10, 30))
     
     # 2. 搜索达人
     if not search_creator(page, creator_id):
         return False
     
+    time.sleep(random.uniform(10, 30))  # 搜索后等待 10-30 秒
+    
     if not check_and_handle_verification(page):
         return False
+    
+    time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
     
     # 3. 点击搜索结果
     if not click_search_result(page, creator_id):
@@ -558,7 +568,7 @@ def navigate_to_creator_via_search(page, creator_id):
         print(f"   🔄 尝试直接导航到达人主页")
         direct_url = f"https://www.tiktok.com/@{creator_id}"
         page.goto(direct_url, wait_until="domcontentloaded", timeout=30000)
-        time.sleep(random.uniform(2, 4))
+        time.sleep(random.uniform(10, 30))  # 直接导航后等待 10-30 秒
         
         if not check_and_handle_verification(page):
             return False
