@@ -332,6 +332,36 @@ def check_and_handle_verification(page, force_check=False, debug=False):
     return True
 
 
+def is_logged_in(page):
+    """检查是否已登录 TikTok"""
+    try:
+        # 检查是否有登录对话框
+        login_dialog_selectors = [
+            'dialog:has-text("Log in to TikTok")',
+            '[role="dialog"]:has-text("Log in to TikTok")',
+            'h2:has-text("Log in to TikTok")',
+            'text="Log in to TikTok"',
+        ]
+        
+        for selector in login_dialog_selectors:
+            try:
+                locator = page.locator(selector).first
+                if locator.is_visible(timeout=1000):
+                    return False
+            except:
+                continue
+        
+        # 检查是否有"登录"按钮（未登录状态）
+        login_btn = page.locator('button:has-text("Log in")').first
+        if login_btn.is_visible(timeout=1000):
+            # 如果在个人主页还看到登录按钮，说明未登录
+            return False
+            
+        return True
+    except:
+        return True  # 默认已登录
+
+
 def click_element(page, selectors, element_name, timeout=3000):
     """点击元素"""
     for selector in selectors:
@@ -826,6 +856,15 @@ def run_dm_task(tiktok_url, message):
                                 locator.click()
                                 print(f"   ✅ 已点击消息按钮: {selector}")
                                 message_clicked = True
+                                
+                                # 点击后检查是否弹出登录对话框
+                                time.sleep(random.uniform(2, 3))  # 等待对话框出现
+                                if not is_logged_in(page):
+                                    print("\n❌ 检测到需要登录 TikTok 才能发送消息")
+                                    print("   💡 请在 Chrome 浏览器中登录 TikTok 后重试")
+                                    print("   💡 或者使用已登录 TikTok 的浏览器连接")
+                                    return False
+                                
                                 break
                 except Exception as e:
                     continue
