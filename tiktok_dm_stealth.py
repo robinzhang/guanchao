@@ -423,7 +423,7 @@ def search_creator(page, creator_id):
             
             btn.click()
             print(f"   ✅ 点击了搜索按钮")
-            time.sleep(random.uniform(10, 30))  # 等待搜索弹窗出现
+            time.sleep(random.uniform(3, 6))  # 等待搜索弹窗出现
             
             # 点击后，查找弹出的搜索输入框
             search_input_selectors = [
@@ -441,7 +441,7 @@ def search_creator(page, creator_id):
                     if inp.is_visible(timeout=2000):
                         print(f"   🔍 找到搜索输入框: {input_sel}")
                         inp.fill(creator_id)
-                        time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
+                        time.sleep(random.uniform(3, 6))  # 输入后等待 10-30 秒
                         input_found = True
                         print(f"   ✅ 在搜索输入框输入: @{creator_id}")
                         break
@@ -470,7 +470,7 @@ def search_creator(page, creator_id):
                 icon = page.locator(selector).first
                 if icon.is_visible(timeout=1000):
                     icon.click()
-                    time.sleep(random.uniform(10, 30))  # 点击图标后等待 10-30 秒
+                    time.sleep(random.uniform(3, 6))  # 点击图标后等待 10-30 秒
                     print(f"   ✅ 点击了搜索图标: {selector}")
                     
                     # 点击后再次尝试找搜索框
@@ -478,9 +478,9 @@ def search_creator(page, creator_id):
                         try:
                             inp = page.locator(sel).first
                             if inp.is_visible(timeout=1000):
-                                time.sleep(random.uniform(10, 30))  # 找到输入框后等待 10-30 秒
+                                time.sleep(random.uniform(3, 6))  # 找到输入框后等待 10-30 秒
                                 inp.fill(creator_id)
-                                time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
+                                time.sleep(random.uniform(3, 6))  # 输入后等待 10-30 秒
                                 input_found = True
                                 print(f"   ✅ 点击图标后在搜索框输入: @{creator_id}")
                                 break
@@ -497,14 +497,14 @@ def search_creator(page, creator_id):
         print("   ⚠️ 未找到搜索框，直接导航到搜索页面")
         search_url = f"https://www.tiktok.com/search?q={creator_id}&t={int(time.time())}"
         page.goto(search_url, wait_until="domcontentloaded")
-        time.sleep(random.uniform(10, 30))  # 导航到搜索页后等待 10-30 秒
+        time.sleep(random.uniform(3, 6))  # 导航到搜索页后等待 10-30 秒
         return check_and_handle_verification(page)
     
     # 按回车搜索
-    time.sleep(random.uniform(10, 30))  # 按回车前等待 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 按回车前等待 10-30 秒
     page.keyboard.press("Enter")
     print("   ✅ 按下回车搜索")
-    time.sleep(random.uniform(10, 30))  # 按回车后等待 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 按回车后等待 10-30 秒
     
     return check_and_handle_verification(page)
 
@@ -514,7 +514,7 @@ def click_search_result(page, creator_id):
     print(f"\n📍 查找达人 @{creator_id} 的搜索结果...")
     
     # 先等待搜索结果加载
-    time.sleep(random.uniform(10, 30))  # 等待搜索结果加载 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 等待搜索结果加载 10-30 秒
     
     # 方法1: 点击用户 tab
     try:
@@ -535,7 +535,7 @@ def click_search_result(page, creator_id):
                 if locator.is_visible(timeout=2000):
                     locator.click()
                     print(f"   ✅ 点击用户 tab: {selector}")
-                    time.sleep(random.uniform(10, 30))  # 点击后等待 10-30 秒
+                    time.sleep(random.uniform(3, 6))  # 点击后等待 10-30 秒
                     break
             except:
                 continue
@@ -561,7 +561,7 @@ def click_search_result(page, creator_id):
             
             print(f"   🔄 直接导航到: {full_url}")
             page.goto(full_url, wait_until="domcontentloaded")
-            time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
+            time.sleep(random.uniform(3, 6))  # 等待 10-30 秒
             return True
     except Exception as e:
         print(f"   ⚠️ 查找达人链接出错: {e}")
@@ -573,10 +573,10 @@ def click_search_result(page, creator_id):
             box = clickable.bounding_box()
             if box:
                 human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
-                time.sleep(random.uniform(10, 30))
+                time.sleep(random.uniform(3, 6))
                 clickable.click()
                 print(f"   ✅ 点击了达人链接")
-                time.sleep(random.uniform(10, 30))
+                time.sleep(random.uniform(3, 6))
                 return True
     except Exception as e:
         print(f"   ⚠️ 点击达人链接出错: {e}")
@@ -591,24 +591,24 @@ def navigate_to_creator_via_search(page, creator_id):
     # 1. 首先确保在 TikTok 首页
     print("\n📍 步骤1: 打开 TikTok 首页...")
     page.goto("https://www.tiktok.com", wait_until="domcontentloaded", timeout=30000)
-    time.sleep(random.uniform(10, 30))  # 打开首页后等待 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 打开首页后等待 10-30 秒
     
     if not check_and_handle_verification(page, debug=True):
         return False
     
     # 步骤之间等待 10-30 秒
-    time.sleep(random.uniform(10, 30))
+    time.sleep(random.uniform(3, 6))
     
     # 2. 搜索达人
     if not search_creator(page, creator_id):
         return False
     
-    time.sleep(random.uniform(10, 30))  # 搜索后等待 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 搜索后等待 10-30 秒
     
     if not check_and_handle_verification(page):
         return False
     
-    time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
+    time.sleep(random.uniform(3, 6))  # 等待 10-30 秒
     
     # 3. 点击搜索结果
     if not click_search_result(page, creator_id):
@@ -616,7 +616,7 @@ def navigate_to_creator_via_search(page, creator_id):
         print(f"   🔄 尝试直接导航到达人主页")
         direct_url = f"https://www.tiktok.com/@{creator_id}"
         page.goto(direct_url, wait_until="domcontentloaded", timeout=30000)
-        time.sleep(random.uniform(10, 30))  # 直接导航后等待 10-30 秒
+        time.sleep(random.uniform(3, 6))  # 直接导航后等待 10-30 秒
         
         if not check_and_handle_verification(page):
             return False
@@ -714,7 +714,7 @@ def run_dm_task(tiktok_url, message):
             
             # 先滚动到页面顶部，确保看到 profile header
             page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(random.uniform(10, 30))  # 滚动后等待 10-30 秒
+            time.sleep(random.uniform(3, 6))  # 滚动后等待 10-30 秒
             
             # 检查是否已经关注
             try:
@@ -749,7 +749,7 @@ def run_dm_task(tiktok_url, message):
                                     box = locator.bounding_box()
                                     if box:
                                         human_mouse_move(page, box['x'] + box['width']/2, box['y'] + box['height']/2)
-                                        time.sleep(random.uniform(10, 30))  # 等待 10-30 秒
+                                        time.sleep(random.uniform(3, 6))  # 等待 10-30 秒
                                         locator.click()
                                         print(f"   ✅ 已点击关注按钮: {selector}")
                                         follow_clicked = True
@@ -774,7 +774,7 @@ def run_dm_task(tiktok_url, message):
                                         if back_box:
                                             print(f'   🔍 找到"回关"按钮，点击以回关')
                                             human_mouse_move(page, back_box['x'] + back_box['width']/2, back_box['y'] + back_box['height']/2)
-                                            time.sleep(random.uniform(10, 30))
+                                            time.sleep(random.uniform(3, 6))
                                             back_btn.click()
                                             print(f'   ✅ 已点击"回关"按钮')
                                             follow_clicked = True
@@ -791,7 +791,7 @@ def run_dm_task(tiktok_url, message):
             except Exception as e:
                 print(f"   ⚠️ 检查关注状态出错: {e}")
             
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
 
             # ========================================
             # 步骤2：再次检查人机验证
@@ -807,7 +807,7 @@ def run_dm_task(tiktok_url, message):
             
             # 再次确保在页面顶部
             page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             # 消息按钮选择器（按优先级）
             message_selectors = [
@@ -822,7 +822,7 @@ def run_dm_task(tiktok_url, message):
             
             # 先滚动到页面顶部
             page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             for selector in message_selectors:
                 try:
@@ -835,7 +835,7 @@ def run_dm_task(tiktok_url, message):
                             center_y = box["y"] + box["height"] / 2
                             
                             human_mouse_move(page, center_x, center_y)
-                            time.sleep(random.uniform(10, 30))
+                            time.sleep(random.uniform(3, 6))
                             locator.click()
                             print(f"   ✅ 已点击消息按钮: {selector}")
                             message_clicked = True
@@ -857,7 +857,7 @@ def run_dm_task(tiktok_url, message):
                 print(f"   🔄 导航到: https://www.tiktok.com/@{creator_id}/messages")
                 page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
             
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
 
             # ========================================
             # 步骤4：检查是否进入消息页面/DM页面
@@ -874,7 +874,7 @@ def run_dm_task(tiktok_url, message):
             if '/messages' not in current_url and '/message' not in current_url:
                 print("   🔄 URL 未变化，直接进入消息页面...")
                 page.goto(f"https://www.tiktok.com/@{creator_id}/messages", wait_until="domcontentloaded")
-                time.sleep(random.uniform(10, 30))
+                time.sleep(random.uniform(3, 6))
                 
                 if not check_and_handle_verification(page):
                     return False
@@ -885,7 +885,7 @@ def run_dm_task(tiktok_url, message):
             print("\n📍 步骤4: 在消息页面查找达人对话...")
             
             # 等待消息列表加载
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             # 查找达人的对话
             try:
@@ -914,7 +914,7 @@ def run_dm_task(tiktok_url, message):
             except Exception as e:
                 print(f"   ⚠️ 查找对话出错: {e}")
             
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
 
             # ========================================
             # 步骤7：输入私信
@@ -923,13 +923,13 @@ def run_dm_task(tiktok_url, message):
             print(f"   ✍️ 内容: {message}")
             
             # 输入前等待 10-30 秒
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             if not find_and_type_message(page, message):
                 print("   ⚠️ 输入可能失败")
 
             # 输入后等待 10-30 秒再点击发送
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
 
             # ========================================
             # 步骤7：点击发送
@@ -947,13 +947,13 @@ def run_dm_task(tiktok_url, message):
                 print("   🔄 尝试按回车发送...")
                 page.keyboard.press("Enter")
 
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             # ========================================
             # 步骤8：检查结果
             # ========================================
             # 等待一小段时间看是否有错误提示
-            time.sleep(random.uniform(10, 30))
+            time.sleep(random.uniform(3, 6))
             
             # 再次检查人机验证（发送后可能触发）
             if not check_and_handle_verification(page):
