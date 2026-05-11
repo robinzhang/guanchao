@@ -818,8 +818,9 @@ def run_dm_task(tiktok_url, message):
             
             # 消息按钮选择器（按优先级）
             message_selectors = [
-                # TikTok 达人主页消息链接 - <a href="/messages?...">
+                # TikTok 达人主页消息链接 - <a href="/messages?lang=...&u=用户ID">
                 'a[href*="/messages"]',
+                'a[href*="/messages?"][href*="u="]',
                 # 消息按钮 - data-e2e="message-button" 是关键特征
                 'button[data-e2e="message-button"]',
                 '[data-e2e="message-button"]',
