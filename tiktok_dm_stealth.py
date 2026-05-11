@@ -405,6 +405,8 @@ def search_creator(page, creator_id):
                 
                 # 点击后，查找弹出的搜索输入框
                 search_input_selectors = [
+                    # TikTok 搜索表单
+                    'form[data-e2e="search-box"] input',
                     'input[data-e2e="search-user-input"]',
                     'input[placeholder*="Search" i]',
                     'input[placeholder*="搜索" i]',
