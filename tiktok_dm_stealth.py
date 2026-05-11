@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-TikTok 达人私信脚本 - 深度防检测版
+TikTok 达人私信脚本 - 搜索流程 + 人机验证处理
+流程：首页→搜索达人→进入主页→浏览→关注→私信
 """
 
 import sys
@@ -9,7 +10,7 @@ import time
 import random
 import argparse
 import os
-import json
+import re
 
 # ============================================================
 # 配置区
@@ -21,8 +22,11 @@ CONNECT_EXISTING_CHROME = True
 MIN_DELAY_SECONDS = 90
 MAX_DELAY_SECONDS = 300
 
+# 人机验证等待配置
+MAX_VERIFICATION_WAIT = 600  # 最大等待 10 分钟
+
 # ============================================================
-# 深度反检测工具
+# 反检测工具
 # ============================================================
 
 try:
@@ -34,17 +38,14 @@ except ImportError:
 
 
 def apply_stealth(page):
-    """应用深度反检测措施"""
+    """应用反检测措施"""
     if STEALTH_AVAILABLE:
         try:
             stealth_instance = StealthClass()
             stealth_instance.apply_stealth_sync(page)
         except Exception as e:
             print(f"   ⚠️ stealth 应用失败: {e}")
-    else:
-        print("   ℹ️ 使用增强版手动反检测")
     
-    # 应用增强的反检测措施
     _apply_enhanced_stealth(page)
 
 
@@ -52,191 +53,56 @@ def _apply_enhanced_stealth(page):
     """增强版手动反检测"""
     page.evaluate("""
         () => {
-            // 1. 基础 WebDriver 隐藏
+            // 基础
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             
-            // 2. 真实的插件列表
+            // 插件
             Object.defineProperty(navigator, 'plugins', {
                 get: () => [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', version: '1.0' },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', version: '2.1' },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', version: '' },
-                    { name: 'Widevine Content Decryption Module', filename: 'widevinecdmadapter.dll', description: 'WidevineCDM', version: '4.10.2557.0' },
-                    { name: 'Edge PDF Viewer', filename: 'internal-pdf-viewer', description: '', version: '' },
-                    { name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer2', description: '', version: '' }
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin' },
+                    { name: 'Widevine Content Decryption Module', filename: 'widevinecdmadapter.dll' }
                 ]
             });
             
-            // 3. 真实的语言设置
+            // 语言
             Object.defineProperty(navigator, 'languages', {
-                get: () => ['zh-CN', 'zh', 'en-US', 'en', 'ja-JP', 'ja']
+                get: () => ['zh-CN', 'zh', 'en-US', 'en']
             });
             
-            // 4. Chrome runtime 对象
+            // Chrome runtime
             window.chrome = {
-                runtime: {
-                    id: null,
-                    lastError: null,
-                    connect: () => ({id: 1}),
-                    sendMessage: () => ({})
-                },
-                app: {
-                    isInstalled: false,
-                    GetDetails: () => null,
-                    installState: () => ({state: 'not installed'})
-                },
-                webstore: {
-                    onNewRipple: { addListener: () => {} },
-                    onRequestEligibility: { addListener: () => {} }
-                },
+                runtime: { id: null, lastError: null, connect: () => ({}), sendMessage: () => ({}) },
+                app: { isInstalled: false },
                 storage: {
-                    local: {
-                        get: (k, cb) => cb({}),
-                        set: (o, cb) => cb(),
-                        remove: (k, cb) => cb(),
-                        clear: (cb) => cb()
-                    },
-                    managed: { get: (k, cb) => cb({}), set: () => {}, onChanged: { addListener: () => {} } },
-                    session: { get: (k, cb) => cb({}), set: (o, cb) => cb(), onChanged: { addListener: () => {} } }
-                },
-                tabs: { query: () => new Promise(r => r([])), getCurrent: () => new Promise(r => r(null)) },
-                runtime: {
-                    onStartup: { addListener: () => {} },
-                    onInstalled: { addListener: () => {} },
-                    onSuspend: { addListener: () => {} },
-                    onMessage: { addListener: () => {} },
-                    sendMessage: () => Promise.resolve(),
-                    connect: () => ({ onMessage: { addListener: () => {} }, onDisconnect: { addListener: () => {} } })
+                    local: { get: (k, cb) => cb({}), set: (o, cb) => cb(), remove: (k, cb) => cb() },
+                    managed: { get: (k, cb) => cb({}) },
+                    session: { get: (k, cb) => cb({}) }
                 }
             };
             
-            // 5. Permissions
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-            
-            // 6. Hardware concurrency 和 device memory
-            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-            
-            // 7. Platform 和 user agent data
-            Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
-            Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
-            Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.' });
-            
-            // 8. WebGL 指纹隐藏
-            const getContext = HTMLCanvasElement.prototype.getContext;
-            HTMLCanvasElement.prototype.getContext = function(type, attributes) {
-                const context = getContext.call(this, type, attributes);
-                if (type === 'webgl' || type === 'webgl2') {
-                    const originalGetParameter = context.getParameter.bind(context);
-                    context.getParameter = function(param) {
-                        // 隐藏 WebGL 渲染器指纹
-                        if (param === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR
-                        if (param === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER
-                        return originalGetParameter(param);
-                    };
-                }
-                return context;
-            };
-            
-            // 9. AudioContext 指纹隐藏
-            const audioContext = window.AudioContext || window.webkitAudioContext;
-            if (audioContext) {
-                const originalGetChannelData = audioContext.prototype.constructor.prototype.getChannelData;
-                // 不做修改，只是确保不暴露异常
-            }
-            
-            // 10. 移除 automation 检测
+            // 清除自动化检测变量
             delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
             delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
             delete window.cdc_adoQpoasnfa76pfcZLmcfl_String;
             delete window.__webdriver_evaluate;
             delete window.__selenium_evaluate;
             delete window.__webdriver_script_function;
-            delete window.__webdriver_script_func;
-            delete window.__webdriver_script_fn;
             delete window.__fxdriver_evaluate;
             delete window.__driver_unwrapped;
             delete window.__webdriver_unwrapped;
             delete window.__driver_evaluate;
             delete window.__selenium_unwrapped;
             delete window.__fxdriver_unwrapped;
-            delete window.__dom_api__;
-            delete window.__init_window_ref__;
-            delete window.__clock_on;
-            delete window.__Selenium_IDE_Recorder;
-            delete window._selenium;
             delete window.BOT;
+            delete window._selenium;
             
-            // 11. Canvas 指纹随机化（轻微噪声）
-            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-            HTMLCanvasElement.prototype.toDataURL = function(...args) {
-                const result = originalToDataURL.apply(this, args);
-                // 稍微修改一点点像素添加不可见噪声
-                try {
-                    const imgData = result.split(',');
-                    if (imgData[1]) {
-                        const binary = atob(imgData[1]);
-                        const array = [];
-                        for (let i = 0; i < binary.length; i++) {
-                            array.push(binary.charCodeAt(i));
-                        }
-                        // 只在特定位置添加微不可见变化
-                        if (array.length > 100) {
-                            array[100] = (array[100] + 1) % 256;
-                        }
-                    }
-                } catch (e) {}
-                return result;
-            };
-            
-            // 12. connection type
-            Object.defineProperty(navigator, 'connection', {
-                get: () => ({
-                    effectiveType: '4g',
-                    downlink: 10,
-                    rtt: 50,
-                    downlinkMax: 100,
-                    type: 'wifi'
-                })
-            });
-            
-            // 13. battery
-            if ('getBattery' in navigator) {
-                navigator.getBattery = () => Promise.resolve({
-                    charging: true,
-                    chargingTime: 0,
-                    dischargingTime: Infinity,
-                    level: 1.0
-                });
-            }
-            
-            // 14. mediaDevices
-            if (navigator.mediaDevices) {
-                navigator.mediaDevices.enumerateDevices = () => Promise.resolve([
-                    { kind: 'audioinput', deviceId: 'default', groupId: 'group1', label: '' },
-                    { kind: 'videoinput', deviceId: 'default', groupId: 'group2', label: '' }
-                ]);
-            }
-        }
-    """)
-    
-    # 额外设置：禁用自动化检测相关的事件
-    page.evaluate("""
-        () => {
-            // 监听并拦截 automation 相关事件
-            document.addEventListener('visibilitychange', e => {
-                if (document.visibilityState === 'hidden') {
-                    // 模拟真实用户行为
-                }
-            });
-            
-            // 防止检测到自动化
-            Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
+            // Hardware
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+            Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+            Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
         }
     """)
 
@@ -257,129 +123,160 @@ def human_mouse_move(page, x, y, steps=None):
     if steps is None:
         steps = random.randint(12, 20)
     
-    # 获取当前鼠标位置
     current_x, current_y = page.mouse.position
     
-    # 使用贝塞尔曲线模拟真实移动
     for i in range(steps):
         t = i / (steps - 1) if steps > 1 else 1
+        ease_t = 1 - ((1 - t) * (1 - t) * (1 - t))
         
-        # 添加随机抖动
-        if i > 0 and i < steps - 1:
-            jitter_x = random.uniform(-15, 15)
-            jitter_y = random.uniform(-15, 15)
-        else:
-            jitter_x = 0
-            jitter_y = 0
-        
-        # 使用缓动函数
-        ease_t = 1 - ((1 - t) * (1 - t) * (1 - t))  # cubic ease-out
+        jitter_x = random.uniform(-10, 10) if i > 0 and i < steps - 1 else 0
+        jitter_y = random.uniform(-10, 10) if i > 0 and i < steps - 1 else 0
         
         cx = current_x + (x - current_x) * ease_t + jitter_x
         cy = current_y + (y - current_y) * ease_t + jitter_y
         
-        # 添加微小的延迟变化
-        delay = random.uniform(0.008, 0.02)
         page.mouse.move(int(cx), int(cy))
-        time.sleep(delay)
+        time.sleep(random.uniform(0.008, 0.02))
     
-    # 确保最终位置精确
     page.mouse.move(int(x), int(y))
-    
-    # 模拟悬停后的小抖动（真实用户不会完全静止）
-    if random.random() < 0.3:
-        for _ in range(random.randint(1, 3)):
-            offset_x = random.randint(-2, 2)
-            offset_y = random.randint(-2, 2)
-            page.mouse.move(int(x + offset_x), int(y + offset_y))
-            time.sleep(random.uniform(0.05, 0.15))
 
 
 def human_scroll(page, direction='down', amount=None):
     """人性化滚动"""
     if amount is None:
-        amount = random.randint(400, 1200)
+        amount = random.randint(400, 1000)
     
-    # 模拟鼠标滚轮事件
     page.mouse.wheel(0, amount if direction == 'down' else -amount)
     
-    # 随机添加一些页面内微小滚动
     if random.random() < 0.4:
         time.sleep(random.uniform(0.1, 0.3))
-        micro_scroll = random.randint(20, 80)
-        page.evaluate(f"window.scrollBy(0, {micro_scroll * (1 if direction == 'down' else -1)})")
+        page.evaluate(f"window.scrollBy(0, {random.randint(20, 80) * (1 if direction == 'down' else -1)})")
 
 
 def scroll_and_watch(page, scroll_count=5):
-    """滚动浏览视频"""
+    """滚动浏览"""
     for i in range(scroll_count):
-        # 随机选择滚动方式
         scroll_method = random.choice(['wheel', 'js', 'keys'])
         
         if scroll_method == 'wheel':
-            scroll_amount = random.randint(400, 1000)
-            human_scroll(page, 'down', scroll_amount)
+            human_scroll(page, 'down', random.randint(400, 1000))
         elif scroll_method == 'js':
-            scroll_amount = random.randint(500, 1200)
-            # 添加随机偏移模拟真实用户
-            page.evaluate(f"""
-                window.scrollBy({{
-                    top: {scroll_amount + random.randint(-50, 50)},
-                    behavior: 'smooth'
-                }})
-            """)
+            page.evaluate(f"window.scrollBy(0, {random.randint(500, 1200)})")
         else:
-            # 使用键盘滚动
             page.keyboard.press('PageDown')
         
-        # 每个视频观看时间
         watch_time = random.uniform(3, 7)
         time.sleep(watch_time)
         
-        # 模拟偶尔的回看行为（真实用户会这样）
         if random.random() < 0.2:
-            back_scroll = random.randint(50, 200)
-            page.evaluate(f"window.scrollBy(0, -{back_scroll})")
+            page.evaluate(f"window.scrollBy(0, -{random.randint(50, 200)})")
             time.sleep(random.uniform(0.5, 1.5))
-            # 再滚回来
-            page.evaluate(f"window.scrollBy(0, {back_scroll})")
-            time.sleep(random.uniform(0.5, 1))
+            page.evaluate(f"window.scrollBy(0, {random.randint(50, 200)})")
         
-        print(f"   👀 浏览第 {i+1}/{scroll_count} 个视频 (~{watch_time:.1f}s)")
+        print(f"   👀 浏览第 {i+1}/{scroll_count} 个视频")
 
 
-def human_typing(element, text, min_delay=80, max_delay=180):
-    """人性化打字"""
-    for char in text:
-        # 随机延迟
-        delay = random.uniform(min_delay, max_delay)
+def is_verification_page(page):
+    """检测是否有人机验证页面"""
+    verification_indicators = [
+        # 验证码相关
+        '[class*="captcha"]',
+        '[class*="verify"]',
+        '[class*="verification"]',
+        '[id*="captcha"]',
+        '[id*="verify"]',
+        # TikTok 特定验证
+        '[data-e2e*="captcha"]',
+        '#captcha',
+        '.captcha',
+        # 滑块验证
+        '[class*="slider"]',
+        '[class*="slide"]',
+        # 行为验证
+        '[class*="human"]',
+        '[class*="bot"]',
+        # 通用验证
+        'iframe[src*="captcha"]',
+        'iframe[src*="verify"]',
+    ]
+    
+    try:
+        for selector in verification_indicators:
+            if page.locator(selector).first.is_visible(timeout=1000):
+                return True
         
-        # 偶尔添加暂停（模拟思考）
-        if random.random() < 0.05:
-            time.sleep(random.uniform(0.2, 0.5))
+        # 检查 URL
+        url = page.url.lower()
+        if any(k in url for k in ['captcha', 'verify', 'human', 'challenge']):
+            return True
         
-        element.type(char, delay=delay)
+        # 检查页面标题或内容
+        content = page.content()
+        if any(k in content.lower() for k in ['verify you are human', '人机验证', '验证是人', 'confirm you are human']):
+            return True
+            
+    except Exception:
+        pass
+    
+    return False
 
 
-def click_element(page, selectors, element_name):
-    """点击元素（人性化）"""
+def wait_for_verification(page, check_interval=5):
+    """等待人机验证完成"""
+    print("\n" + "="*50)
+    print("⚠️ 检测到人机验证！")
+    print("="*50)
+    print("请在浏览器中完成验证...")
+    print(f"最大等待时间: {MAX_VERIFICATION_WAIT} 秒")
+    print("="*50)
+    
+    start_time = time.time()
+    check_count = 0
+    
+    while time.time() - start_time < MAX_VERIFICATION_WAIT:
+        try:
+            # 检查是否还在验证页面
+            if not is_verification_page(page):
+                elapsed = int(time.time() - start_time)
+                print(f"\n✅ 验证已完成！耗时: {elapsed} 秒")
+                time.sleep(2)  # 额外等待页面稳定
+                return True
+            
+            check_count += 1
+            if check_count % 12 == 0:  # 每分钟提示一次
+                elapsed = int(time.time() - start_time)
+                remaining = MAX_VERIFICATION_WAIT - elapsed
+                print(f"   ⏳ 仍在等待验证... ({elapsed}s 已过, 剩余 {remaining}s)")
+            
+            time.sleep(check_interval)
+            
+        except Exception as e:
+            print(f"   ⚠️ 检查验证状态时出错: {e}")
+            time.sleep(check_interval)
+    
+    print(f"\n❌ 验证等待超时 ({MAX_VERIFICATION_WAIT} 秒)")
+    return False
+
+
+def check_and_handle_verification(page):
+    """检查并处理人机验证"""
+    if is_verification_page(page):
+        return wait_for_verification(page)
+    return True
+
+
+def click_element(page, selectors, element_name, timeout=3000):
+    """点击元素"""
     for selector in selectors:
         try:
             locator = page.locator(selector).first
-            if locator.is_visible(timeout=2000):
-                # 获取元素位置
+            if locator.is_visible(timeout=timeout):
                 box = locator.bounding_box()
                 if box:
                     center_x = box["x"] + box["width"] / 2
                     center_y = box["y"] + box["height"] / 2
-                    
-                    # 人性化移动到元素
                     human_mouse_move(page, center_x, center_y)
-                    
-                    # 悬停一下（真实用户会这样）
                     time.sleep(random.uniform(0.3, 0.8))
-                    
-                    # 点击
                     locator.click()
                     print(f"   ✅ 已点击 {element_name}")
                     return True
@@ -389,35 +286,149 @@ def click_element(page, selectors, element_name):
     return False
 
 
+def search_creator(page, creator_id):
+    """在搜索框搜索达人"""
+    print(f"\n📍 搜索达人: @{creator_id}")
+    
+    # 方法1: 点击搜索框输入
+    search_selectors = [
+        'input[type="search"]',
+        'input[placeholder*="Search"]',
+        'input[placeholder*="搜索"]',
+        '[data-e2e="search-user-input"]',
+        'input[class*="search"]',
+    ]
+    
+    input_found = False
+    for selector in search_selectors:
+        try:
+            inp = page.locator(selector).first
+            if inp.is_visible(timeout=2000):
+                inp.click()
+                time.sleep(random.uniform(0.2, 0.5))
+                inp.fill(creator_id)
+                input_found = True
+                print(f"   ✅ 在搜索框输入: @{creator_id}")
+                break
+        except Exception:
+            continue
+    
+    # 方法2: 如果没找到搜索框，尝试直接导航
+    if not input_found:
+        print("   ⚠️ 未找到搜索框，尝试直接搜索 URL")
+        search_url = f"https://www.tiktok.com/search?q={creator_id}"
+        page.goto(search_url, wait_until="domcontentloaded")
+        time.sleep(random.uniform(2, 4))
+        return check_and_handle_verification(page)
+    
+    # 按回车搜索
+    time.sleep(random.uniform(0.5, 1.5))
+    page.keyboard.press("Enter")
+    print("   ✅ 按下回车搜索")
+    time.sleep(random.uniform(2, 4))
+    
+    return check_and_handle_verification(page)
+
+
+def click_search_result(page, creator_id):
+    """点击搜索结果中的达人"""
+    print(f"\n📍 查找达人 @{creator_id} 的搜索结果...")
+    
+    # 方法1: 点击用户 tab
+    try:
+        user_tab_selectors = [
+            'div[class*="tab"]:has-text("用户")',
+            'div[class*="tab"]:has-text("User")',
+            'div[class*="tab"]:has-text("People")',
+            '[class*="search-tab"]:has-text("用户")',
+            '[class*="search-tab"]:has-text("People")',
+        ]
+        for selector in user_tab_selectors:
+            if page.locator(selector).first.is_visible(timeout=2000):
+                page.locator(selector).first.click()
+                print("   ✅ 点击用户 tab")
+                time.sleep(random.uniform(1, 2))
+                break
+    except Exception:
+        pass
+    
+    # 方法2: 直接在搜索结果中找达人
+    # 搜索结果中的用户卡片
+    user_card_selectors = [
+        # 用户卡片
+        f'a[href*="/{creator_id}"]',
+        f'div[class*="user"]:has-text("{creator_id}")',
+        f'div[class*="creator"]:has-text("{creator_id}")',
+        f'div[class*="author"]:has-text("{creator_id}")',
+        # 通用用户链接
+        'a[href*="/@"]',
+        'div[class*="user-card"] a',
+        '[class*="search-result"] a[href*="@"]',
+        # 用户列表项
+        '[class*="user-list"] a',
+        '[class*="user-item"] a',
+    ]
+    
+    for selector in user_card_selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator.is_visible(timeout=3000):
+                href = locator.get_attribute('href')
+                if href and '@' in href:
+                    box = locator.bounding_box()
+                    if box:
+                        human_mouse_move(page, box["x"] + box["width"]/2, box["y"] + box["height"]/2)
+                        time.sleep(random.uniform(0.3, 0.6))
+                        locator.click()
+                        print(f"   ✅ 点击达人主页: {href}")
+                        time.sleep(random.uniform(2, 4))
+                        return True
+        except Exception:
+            continue
+    
+    print("   ⚠️ 未在搜索结果中找到达人")
+    return False
+
+
+def navigate_to_creator_via_search(page, creator_id):
+    """通过搜索流程导航到达人主页"""
+    # 1. 首先确保在 TikTok 首页
+    print("\n📍 步骤1: 打开 TikTok 首页...")
+    page.goto("https://www.tiktok.com", wait_until="domcontentloaded", timeout=30000)
+    time.sleep(random.uniform(2, 4))
+    
+    if not check_and_handle_verification(page):
+        return False
+    
+    # 2. 搜索达人
+    if not search_creator(page, creator_id):
+        return False
+    
+    if not check_and_handle_verification(page):
+        return False
+    
+    # 3. 点击搜索结果
+    if not click_search_result(page, creator_id):
+        # 如果搜索结果点击失败，尝试直接导航
+        print(f"   🔄 尝试直接导航到达人主页")
+        direct_url = f"https://www.tiktok.com/@{creator_id}"
+        page.goto(direct_url, wait_until="domcontentloaded", timeout=30000)
+        time.sleep(random.uniform(2, 4))
+        
+        if not check_and_handle_verification(page):
+            return False
+    
+    return True
+
+
 def find_and_type_message(page, message):
     """找到并输入消息"""
-    # 尝试多种输入方式
     input_methods = [
-        # 方法1: Draft.js contenteditable（TikTok 常用）
-        {
-            'selector': 'div[contenteditable="true"][aria-label*="消息"], div[contenteditable="true"][aria-label*="message"]',
-            'type': 'contenteditable'
-        },
-        # 方法2: 直接 contenteditable
-        {
-            'selector': 'div[contenteditable="true"][role="textbox"]',
-            'type': 'contenteditable'
-        },
-        # 方法3: textarea
-        {
-            'selector': 'textarea',
-            'type': 'textarea'
-        },
-        # 方法4: data-e2e 输入框
-        {
-            'selector': '[data-e2e="message-input"], [data-e2e="dm-input"]',
-            'type': 'input'
-        },
-        # 方法5: 通用 input
-        {
-            'selector': 'input[type="text"], input:not([type])',
-            'type': 'input'
-        },
+        {'selector': 'div[contenteditable="true"][aria-label*="消息"], div[contenteditable="true"][aria-label*="message"]', 'type': 'contenteditable'},
+        {'selector': 'div[contenteditable="true"][role="textbox"]', 'type': 'contenteditable'},
+        {'selector': 'textarea', 'type': 'textarea'},
+        {'selector': '[data-e2e="message-input"], [data-e2e="dm-input"]', 'type': 'input'},
+        {'selector': 'input[type="text"], input:not([type])', 'type': 'input'},
     ]
     
     for method in input_methods:
@@ -426,13 +437,10 @@ def find_and_type_message(page, message):
             if locator.is_visible(timeout=3000):
                 locator.click()
                 time.sleep(random.uniform(0.2, 0.5))
-                
-                # 清空现有内容
                 locator.clear()
                 time.sleep(random.uniform(0.1, 0.3))
                 
                 if method['type'] == 'contenteditable':
-                    # 使用 type 模拟真实输入
                     for char in message:
                         locator.type(char, delay=random.uniform(80, 180))
                 else:
@@ -440,7 +448,7 @@ def find_and_type_message(page, message):
                 
                 print(f"   ✅ 文字已输入 ({method['selector']})")
                 return True
-        except Exception as e:
+        except Exception:
             continue
     
     print("   ⚠️ 无法自动填写，请手动输入")
@@ -457,6 +465,14 @@ def run_dm_task(tiktok_url, message):
     print(f"💬 私信: {message}")
     print("="*50)
 
+    # 从 URL 提取达人 ID
+    creator_id_match = re.search(r'/@([^/]+)', tiktok_url)
+    creator_id = creator_id_match.group(1) if creator_id_match else None
+    
+    if not creator_id:
+        print("❌ 无法从 URL 提取达人 ID")
+        return False
+
     with sync_playwright() as p:
         if CONNECT_EXISTING_CHROME:
             print(f"🔗 连接 Chrome: {CDP_URL}")
@@ -468,28 +484,32 @@ def run_dm_task(tiktok_url, message):
             browser = p.chromium.launch(headless=False)
             context = browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
             page = context.new_page()
 
-        # 应用反检测
         apply_stealth(page)
 
         try:
             # ========================================
-            # 步骤1：打开首页，浏览视频
+            # 步骤0：通过搜索流程导航到达人主页
             # ========================================
-            print("\n📍 步骤1: 打开首页，浏览视频...")
-            page.goto(tiktok_url, wait_until="domcontentloaded", timeout=30000)
-            time.sleep(random.uniform(1.5, 3))
+            print(f"\n📍 步骤0: 通过搜索流程导航到 @{creator_id} 的主页...")
             
-            # 随机滚动浏览
+            if not navigate_to_creator_via_search(page, creator_id):
+                print("❌ 导航到达人主页失败")
+                return False
+            
+            # 检查人机验证
+            if not check_and_handle_verification(page):
+                print("❌ 人机验证未通过")
+                return False
+            
+            # ========================================
+            # 步骤1：浏览视频
+            # ========================================
+            print("\n📍 步骤1: 浏览视频...")
             scroll_and_watch(page, scroll_count=random.randint(3, 8))
-
-            # 等待 3-10 秒
-            wait_time = random.uniform(3, 10)
-            print(f"   🤖 浏览后等待 {wait_time:.1f} 秒...")
-            time.sleep(wait_time)
+            time.sleep(random.uniform(3, 8))
 
             # ========================================
             # 步骤2：点击关注
@@ -501,46 +521,70 @@ def run_dm_task(tiktok_url, message):
                 'button:has-text("关注")',
                 '[class*="follow"]',
             ]
-            click_element(page, follow_selectors, "关注")
-
-            # ========================================
-            # 步骤3：再滚动一下
-            # ========================================
-            print("\n📍 步骤3: 滚动页面...")
-            human_scroll(page, 'down', random.randint(400, 800))
+            
+            if not click_element(page, follow_selectors, "关注"):
+                # 可能已经在关注列表中，检查是否已关注
+                if page.locator('[data-e2e="following-button"]').is_visible(timeout=2000):
+                    print("   ℹ️ 已经关注该达人")
+                else:
+                    print("   ⚠️ 关注操作可能失败，继续")
+            
             time.sleep(random.uniform(1, 3))
 
             # ========================================
-            # 步骤4：等待后点击消息
+            # 步骤3：再次检查人机验证
             # ========================================
-            wait_time = random.uniform(5, 10)
-            print(f"\n📍 步骤4: 等待 {wait_time:.1f} 秒后点击消息...")
-            time.sleep(wait_time)
+            if not check_and_handle_verification(page):
+                print("❌ 关注后触发了人机验证")
+                return False
 
-            print("\n📍 步骤5: 点击消息...")
+            # ========================================
+            # 步骤4：点击消息
+            # ========================================
+            print("\n📍 步骤3: 点击消息...")
+            
+            # 再次滚动确保消息按钮可见
+            human_scroll(page, 'down', random.randint(200, 500))
+            time.sleep(random.uniform(1, 2))
+            
             message_selectors = [
                 '[data-e2e="contact-msg-btn"]',
                 '[data-e2e="message-button"]',
                 'a:has-text("发消息")',
                 'button:has-text("发消息")',
+                'a:has-text("Message")',
             ]
-            click_element(page, message_selectors, "消息")
+            
+            if not click_element(page, message_selectors, "消息"):
+                # 检查是否已经有私信对话框
+                if page.locator('div[contenteditable="true"][role="textbox"]').is_visible(timeout=2000):
+                    print("   ℹ️ 私信对话框已打开")
+                else:
+                    print("   ⚠️ 消息按钮未找到")
+            
+            time.sleep(random.uniform(3, 6))
 
             # ========================================
-            # 步骤6：等待后输入
+            # 步骤5：再次检查人机验证
             # ========================================
-            wait_time = random.uniform(5, 10)
-            print(f"\n📍 步骤6: 等待 {wait_time:.1f} 秒后输入私信...")
-            time.sleep(wait_time)
+            if not check_and_handle_verification(page):
+                print("❌ 点击消息后触发了人机验证")
+                return False
 
-            print(f"   ✍️ 输入: {message}")
-            find_and_type_message(page, message)
+            # ========================================
+            # 步骤6：输入私信
+            # ========================================
+            print("\n📍 步骤4: 输入私信...")
+            print(f"   ✍️ 内容: {message}")
+            
+            if not find_and_type_message(page, message):
+                print("   ⚠️ 输入可能失败")
 
             # ========================================
             # 步骤7：点击发送
             # ========================================
-            print("\n📍 步骤7: 点击发送...")
-            time.sleep(random.uniform(0.8, 2.0))
+            print("\n📍 步骤5: 点击发送...")
+            time.sleep(random.uniform(1, 2))
 
             send_selectors = [
                 'button:has-text("发送")',
@@ -548,11 +592,24 @@ def run_dm_task(tiktok_url, message):
                 '[data-e2e*="send"]',
                 '[class*="send"]',
             ]
+            
             if not click_element(page, send_selectors, "发送"):
                 print("   🔄 尝试按回车发送...")
                 page.keyboard.press("Enter")
 
             time.sleep(2)
+            
+            # ========================================
+            # 步骤8：检查结果
+            # ========================================
+            # 等待一小段时间看是否有错误提示
+            time.sleep(3)
+            
+            # 再次检查人机验证（发送后可能触发）
+            if not check_and_handle_verification(page):
+                print("❌ 发送后触发了人机验证")
+                return False
+            
             print("\n✅ 任务完成！")
 
         except Exception as e:
@@ -566,8 +623,9 @@ def run_dm_task(tiktok_url, message):
         finally:
             browser.close()
 
-    # 发完一条后随机等待再下一条
+    # 发完一条后随机等待
     human_delay()
+    return True
 
 
 def interactive_mode():
@@ -585,11 +643,10 @@ def interactive_mode():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TikTok 达人私信脚本 - 深度防检测版")
+    parser = argparse.ArgumentParser(description="TikTok 达人私信脚本 - 搜索流程 + 人机验证处理")
     parser.add_argument("url", nargs="?", help="达人 TikTok 主页 URL")
     parser.add_argument("message", nargs="?", help="私信内容")
-    default_cdp = "http://localhost:9222"
-    parser.add_argument("--cdp", default=default_cdp, help=f"Chrome CDP 地址")
+    parser.add_argument("--cdp", default="http://localhost:9222", help="Chrome CDP 地址")
     parser.add_argument("--no-connect", action="store_true", help="不连接已有 Chrome")
     args = parser.parse_args()
 
