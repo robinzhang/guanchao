@@ -359,7 +359,14 @@ def search_creator(page, creator_id):
     
     # 方法1: 尝试直接使用搜索框输入
     search_selectors = [
-        # TikTok 实际的搜索输入框
+        # TikTok 实际的搜索按钮（不是 input！）
+        'button[data-e2e="nav-search"]',
+        'button[aria-label="搜索"]',
+        'button[aria-label="Search" i]',
+        'button[role="searchbox"]',
+        'button.TUXButton--capsule',
+        '[data-e2e="nav-search"]',
+        # 备选：搜索 input
         'input[placeholder*="Search" i]',
         'input[placeholder*="搜索" i]',
         'input[data-e2e="search-user-input"]',
@@ -367,35 +374,61 @@ def search_creator(page, creator_id):
         'input[class*="search-input" i]',
         'input[class*="search"][type="text"]',
         'input[type="search"]',
-        'input[id*="search" i]',
-        'input[name*="search" i]',
-        # 备选：任意可能是搜索框的 input
+        # 备选：header 内的搜索
         '#header-search input',
         'header input',
         '[class*="header"] input[class*="search"]',
     ]
     
     input_found = False
-    for selector in search_selectors:
+    
+    # 先尝试点击搜索按钮（不是输入框）
+    search_button_selectors = [
+        'button[data-e2e="nav-search"]',
+        'button[aria-label="搜索"]',
+        'button[aria-label="Search" i]',
+        'button[role="searchbox"]',
+        'button.TUXButton--capsule',
+        '[data-e2e="nav-search"]',
+    ]
+    
+    for selector in search_button_selectors:
         try:
-            inp = page.locator(selector).first
-            if inp.is_visible(timeout=2000):
-                # 获取元素信息用于调试
-                placeholder = inp.get_attribute('placeholder') or ''
-                class_name = inp.get_attribute('class') or ''
-                print(f"   🔍 尝试选择器: {selector} | placeholder: {placeholder}")
+            btn = page.locator(selector).first
+            if btn.is_visible(timeout=2000):
+                class_name = btn.get_attribute('class') or ''
+                print(f"   🔍 找到搜索按钮: {selector} | class: {class_name[:50]}")
                 
-                inp.click()
-                time.sleep(random.uniform(10, 30))  # 点击搜索框后等待 10-30 秒
+                btn.click()
+                print(f"   ✅ 点击了搜索按钮")
+                time.sleep(random.uniform(10, 30))  # 等待搜索弹窗出现
                 
-                # 聚焦后清空并输入
-                inp.clear()
-                time.sleep(random.uniform(10, 30))  # 清空后等待 10-30 秒
-                inp.fill(creator_id)
-                time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
-                input_found = True
-                print(f"   ✅ 在搜索框输入: @{creator_id}")
-                break
+                # 点击后，查找弹出的搜索输入框
+                search_input_selectors = [
+                    'input[data-e2e="search-user-input"]',
+                    'input[placeholder*="Search" i]',
+                    'input[placeholder*="搜索" i]',
+                    'input[class*="search-input" i]',
+                    'input[class*="SearchInput" i]',
+                    'input[type="search"]',
+                    '#header-search input',
+                ]
+                
+                for input_sel in search_input_selectors:
+                    try:
+                        inp = page.locator(input_sel).first
+                        if inp.is_visible(timeout=2000):
+                            print(f"   🔍 找到搜索输入框: {input_sel}")
+                            inp.fill(creator_id)
+                            time.sleep(random.uniform(10, 30))  # 输入后等待 10-30 秒
+                            input_found = True
+                            print(f"   ✅ 在搜索输入框输入: @{creator_id}")
+                            break
+                    except:
+                        continue
+                
+                if input_found:
+                    break
         except Exception as e:
             continue
     
