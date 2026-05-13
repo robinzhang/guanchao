@@ -64,6 +64,7 @@ echo.
 echo [4/4] Checking script file...
 
 set SCRIPT_URL=https://raw.githubusercontent.com/robinzhang/guanchao/main/tiktok_dm_stealth.py
+set WIN_START_URL=https://raw.githubusercontent.com/robinzhang/guanchao/main/win_start.bat
 set SCRIPT_PATH=%USERPROFILE%\Desktop\TikTok-DM-Tool
 mkdir "%SCRIPT_PATH%" 2>nul
 
@@ -71,7 +72,7 @@ where tiktok_dm_stealth.py >nul 2>&1
 if %errorlevel% equ 0 (
     echo    [OK] Script found in current directory
 ) else (
-    echo    Downloading script...
+    echo    Downloading tiktok_dm_stealth.py...
     powershell -Command "Invoke-WebRequest -Uri '%SCRIPT_URL%' -OutFile '%SCRIPT_PATH%\tiktok_dm_stealth.py'"
     if %errorlevel% equ 0 (
         echo    [OK] Script saved to: %SCRIPT_PATH%
@@ -83,11 +84,14 @@ if %errorlevel% equ 0 (
     )
 )
 
+echo    Downloading win_start.bat...
+powershell -Command "Invoke-WebRequest -Uri '%WIN_START_URL%' -OutFile '%SCRIPT_PATH%\win_start.bat'"
+
 :: ========================================
 :: Done
 :: ========================================
 echo.
-echo ========================================
+echo ==========================================
 echo    INSTALLATION COMPLETE!
 echo ========================================
 echo.
@@ -101,10 +105,7 @@ echo    4. Login to TikTok with this Profile
 echo.
 echo [Step 2] Close ALL Chrome windows
 echo.
-echo [Step 3] Start Chrome in debug mode
-echo    Press Win+R, paste and run this:
-echo.
-echo "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --profile-directory="Profile 2"
+echo [Step 3] Chrome debug mode will start automatically...
 echo.
 echo [Step 4] Run the DM script
 echo    1. Go to %SCRIPT_PATH%
@@ -113,4 +114,6 @@ echo    3. Enter TikTok URL and message
 echo.
 echo ========================================
 echo.
+echo Starting Chrome in debug mode...
+call "%SCRIPT_PATH%\win_start.bat"
 pause
